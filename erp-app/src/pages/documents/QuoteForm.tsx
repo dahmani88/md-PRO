@@ -110,7 +110,7 @@ export default function QuoteForm({ docType, onSaved, onCancel }: Props) {
     },
   })
 
-  const { fields, append, remove, prepend } = useFieldArray({ control, name: 'lines' })
+  const { fields, remove, prepend } = useFieldArray({ control, name: 'lines' })
   const lines = watch('lines')
 
   useEffect(() => {
@@ -286,7 +286,6 @@ export default function QuoteForm({ docType, onSaved, onCancel }: Props) {
             const costLine = qty * cmup
             const marginLine = htLine - costLine
             const marginPctLine = htLine > 0 ? (marginLine / htLine) * 100 : 0
-            const marginColor = marginLine < 0 ? 'text-red-500' : marginLine === 0 ? 'text-gray-400' : 'text-green-600'
             return (
               <div key={field.id} className="grid grid-cols-12 gap-2 px-3 py-2 border-t border-gray-100 dark:border-gray-700 items-start">
                 <div className="col-span-3 space-y-1">

@@ -177,8 +177,8 @@ export async function exportBalance(filters: { start_date?: string; end_date?: s
       COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0) as balance
     FROM accounts a
     LEFT JOIN journal_lines jl ON jl.account_id = a.id
-    LEFT JOIN journal_entries je ON je.id = jl.entry_id ${dateFilter ? 'AND 1=1' + dateFilter : ''}
-    WHERE a.is_active = 1
+    LEFT JOIN journal_entries je ON je.id = jl.entry_id
+    WHERE a.is_active = 1 ${dateFilter}
     GROUP BY a.id
     HAVING total_debit > 0 OR total_credit > 0
     ORDER BY a.code ASC

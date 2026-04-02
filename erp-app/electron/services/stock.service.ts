@@ -65,7 +65,8 @@ export function applyMovement(
 ): void {
   const mov = db.prepare('SELECT * FROM stock_movements WHERE id = ?').get(movementId) as any
   if (!mov) throw new Error('Mouvement introuvable')
-  if (mov.applied) throw new Error('Mouvement déjà appliqué')
+  if (mov.applied === 1) throw new Error('Mouvement déjà appliqué')
+  if (mov.applied === -1) throw new Error('Mouvement annulé, impossible de l\'appliquer')
 
   const product = db.prepare('SELECT * FROM products WHERE id = ?').get(mov.product_id) as any
 

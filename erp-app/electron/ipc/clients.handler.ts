@@ -27,7 +27,20 @@ export function registerClientHandlers(): void {
     const countParams = filters?.search ? [`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`] : []
     const total = (db.prepare(countQuery).get(...countParams) as any).c
 
-    return { rows, total, page, limit }
+    // إضافة balance لكل عميل
+    const rowsWithBalance = (rows as any[]).map(client => {
+      const balance = (db.prepare(`
+        SELECT COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
+        FROM documents d
+        LEFT JOIN payment_allocations pa ON pa.document_id = d.id
+        WHERE d.party_id = ? AND d.party_type = 'client'
+          AND d.type = 'invoice' AND d.is_deleted = 0
+          AND d.status IN ('confirmed', 'partial', 'paid')
+      `).get(client.id) as any).balance
+      return { ...client, balance }
+    })
+
+    return { rows: rowsWithBalance, total, page, limit }
   })
 
   handle('clients:getOne', (id: number) => {
@@ -35,14 +48,14 @@ export function registerClientHandlers(): void {
     const client = db.prepare('SELECT * FROM clients WHERE id = ? AND is_deleted = 0').get(id)
     if (!client) throw new Error('Client introuvable')
 
-    // Solde: somme des TTC non payées
+    // Solde: somme des TTC non payées (fac confirmées uniquement)
     const balance = (db.prepare(`
       SELECT COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
       FROM documents d
       LEFT JOIN payment_allocations pa ON pa.document_id = d.id
       WHERE d.party_id = ? AND d.party_type = 'client'
         AND d.type = 'invoice' AND d.is_deleted = 0
-        AND d.status != 'cancelled'
+        AND d.status IN ('confirmed', 'partial', 'paid')
     `).get(id) as any).balance
 
     return { ...client, balance }

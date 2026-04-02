@@ -4,8 +4,8 @@ import { toast } from './ui/Toast'
 import Modal from './ui/Modal'
 import PaymentForm from './forms/PaymentForm'
 import AttachmentsPanel from './AttachmentsPanel'
+import AvoirForm from '../pages/documents/AvoirForm'
 import type { Document } from '../types'
-
 import ConfirmDialog from './ui/ConfirmDialog'
 
 const STATUS_BADGE: Record<string, string> = {
@@ -30,6 +30,9 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
   const [htmlPreview, setHtmlPreview] = useState<string | null>(null)
   const [totalPaid, setTotalPaid] = useState(0)
   const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [linkedDocId, setLinkedDocId] = useState<number | null>(null)
+  const [avoirModal, setAvoirModal] = useState(false)
+  const [stockConfirm, setStockConfirm] = useState(false)
 
   const fmt = (n: number) => new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(n)
 
@@ -48,14 +51,37 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
 
   useEffect(() => { load() }, [docId])
 
+  // المستندات التي تولد حركات مخزون
+  const STOCK_DOC_TYPES = ['bl', 'bl_reception', 'avoir']
+
   async function handleConfirm() {
+    // إذا كان المستند يؤثر على المخزون، اسأل المستخدم
+    if (doc && STOCK_DOC_TYPES.includes(doc.type)) {
+      setStockConfirm(true)
+      return
+    }
+    await doConfirm(false)
+  }
+
+  async function doConfirm(applyStockNow: boolean) {
     try {
       await api.confirmDocument(docId)
-      toast('Document confirmé — Écriture comptable générée')
+      if (applyStockNow) {
+        // نجلب الحركات المعلقة ونطبقها
+        const updated = await api.getDocument(docId) as any
+        for (const mov of (updated.pendingMovements ?? [])) {
+          await api.applyStockMovement(mov.id)
+        }
+        toast('Document confirmé — Stock mis à jour')
+      } else {
+        toast('Document confirmé — ⚠️ Pensez à appliquer les mouvements de stock')
+      }
       load()
       onUpdated()
     } catch (e: any) {
       toast(e.message, 'error')
+    } finally {
+      setStockConfirm(false)
     }
   }
 
@@ -236,16 +262,27 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Documents liés</div>
           <div className="space-y-1">
             {doc.links.map((link: any) => (
-              <div key={link.id} className="flex items-center gap-2 text-xs bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2">
+              <button key={link.id} onClick={() => setLinkedDocId(
+                link.parent_id === doc.id ? link.child_id : link.parent_id
+              )}
+                className="w-full flex items-center gap-2 text-xs bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2 hover:bg-primary/5 transition-colors text-left">
+                <span className="text-gray-400">🔗</span>
                 <span className="font-mono text-primary">{link.related_number}</span>
-                <span className="text-gray-400">{link.related_type}</span>
+                <span className="text-gray-400 capitalize">{link.related_type}</span>
                 <span className={`ml-auto ${STATUS_BADGE[link.related_status] ?? 'badge-gray'}`}>
                   {STATUS_LABEL[link.related_status] ?? link.related_status}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
+      )}
+
+      {/* Modal مستند مرتبط */}
+      {linkedDocId !== null && (
+        <Modal open={true} onClose={() => setLinkedDocId(null)} title="Document lié" size="xl">
+          <DocumentDetail docId={linkedDocId} onUpdated={() => { load(); onUpdated() }} onClose={() => setLinkedDocId(null)} />
+        </Modal>
       )}
 
       {/* Notes */}
@@ -259,46 +296,42 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
       <AttachmentsPanel entityType="document" entityId={doc.id} />
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+      <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-700 flex-wrap">
+        {/* أزرار الحالة */}
         {doc.status === 'draft' && (
-          <button onClick={handleConfirm} className="btn-primary">✅ Confirmer</button>
+          <button onClick={handleConfirm} className="btn-primary btn-sm">✅ Confirmer</button>
         )}
         {doc.type === 'quote' && doc.status === 'confirmed' && (
           <button onClick={async () => {
             try {
               await api.convertDocument({ sourceId: doc.id, targetType: 'invoice', extra: { payment_method: 'cash' } })
-              toast('Converti en facture')
-              load(); onUpdated()
+              toast('Converti en facture'); load(); onUpdated()
             } catch (e: any) { toast(e.message, 'error') }
-          }} className="btn-secondary">📄 → Facture</button>
+          }} className="btn-secondary btn-sm">📄 → Facture</button>
         )}
         {doc.type === 'invoice' && doc.status === 'confirmed' && (
-          <button onClick={async () => {
-            try {
-              await api.convertDocument({ sourceId: doc.id, targetType: 'avoir', extra: { avoir_type: 'retour', affects_stock: false } })
-              toast('Avoir créé')
-              load(); onUpdated()
-            } catch (e: any) { toast(e.message, 'error') }
-          }} className="btn-secondary">↩️ Avoir</button>
+          <button onClick={() => setAvoirModal(true)} className="btn-secondary btn-sm">↩️ Avoir</button>
         )}
         {doc.type === 'invoice' && doc.status === 'confirmed' && (
           <button onClick={async () => {
             try {
               await api.convertDocument({ sourceId: doc.id, targetType: 'bl', extra: {} })
-              toast('Bon de livraison créé')
-              load(); onUpdated()
+              toast('Bon de livraison créé'); load(); onUpdated()
             } catch (e: any) { toast(e.message, 'error') }
-          }} className="btn-secondary">🚚 → Bon de Livraison</button>
+          }} className="btn-secondary btn-sm">🚚 → BL</button>
         )}
-        {(doc.status === 'confirmed' || doc.status === 'partial') && doc.party_id && (
-          <button onClick={() => setPaymentModal(true)} className="btn-primary">
-            💰 Enregistrer paiement
+        {doc.type === 'invoice' && (doc.status === 'confirmed' || doc.status === 'partial') && doc.party_id && (
+          <button onClick={() => setPaymentModal(true)} className="btn-primary btn-sm">
+            💰 Paiement
           </button>
         )}
+        {/* séparateur */}
+        <div className="flex-1" />
+        {/* actions secondaires */}
         {doc.status !== 'cancelled' && doc.status !== 'paid' && (
-          <button onClick={() => setCancelConfirm(true)} className="btn-secondary text-red-500">🚫 Annuler</button>
+          <button onClick={() => setCancelConfirm(true)} className="btn-secondary btn-sm text-red-500">🚫 Annuler</button>
         )}
-        <button onClick={handlePreview} className="btn-secondary ml-auto">🖨️ PDF</button>
+        <button onClick={handlePreview} className="btn-secondary btn-sm">🖨️ PDF</button>
       </div>
 
       {/* Payment Modal */}
@@ -313,6 +346,15 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
         />
       </Modal>
 
+      {/* Avoir Modal */}
+      <Modal open={avoirModal} onClose={() => setAvoirModal(false)} title="Créer un Avoir" size="lg">
+        <AvoirForm
+          sourceInvoice={doc as any}
+          onSaved={() => { setAvoirModal(false); load(); onUpdated() }}
+          onCancel={() => setAvoirModal(false)}
+        />
+      </Modal>
+
       <ConfirmDialog
         open={cancelConfirm}
         title="Annuler ce document"
@@ -322,6 +364,34 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
         onConfirm={handleCancel}
         onCancel={() => setCancelConfirm(false)}
       />
+
+      {/* Stock confirmation dialog */}
+      {stockConfirm && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="card w-full max-w-md p-6 shadow-xl space-y-4">
+            <div className="text-base font-semibold text-gray-800 dark:text-white">
+              📦 Mise à jour du stock
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Ce document va générer des mouvements de stock. Voulez-vous les appliquer maintenant ?
+            </p>
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 rounded-lg px-4 py-3 text-xs text-orange-700 dark:text-orange-400">
+              ⚠️ Si vous choisissez "Plus tard", le stock ne sera pas mis à jour immédiatement. Un rappel sera affiché sur le document.
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setStockConfirm(false)} className="btn-secondary flex-1 justify-center text-sm">
+                Annuler
+              </button>
+              <button onClick={() => doConfirm(false)} className="btn-secondary flex-1 justify-center text-sm text-orange-600 border-orange-300">
+                ⏳ Plus tard
+              </button>
+              <button onClick={() => doConfirm(true)} className="btn-primary flex-1 justify-center text-sm">
+                ✅ Maintenant
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PDF Preview */}
       {htmlPreview && (

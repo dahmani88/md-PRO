@@ -93,10 +93,17 @@ function confirmDocument(id, userId) {
         (0, accounting_service_1.createAccountingEntry)(db, doc, lines, userId);
         // إنشاء حركات المخزون المعلقة
         if (doc.type === 'bl') {
+            // التحقق من المخزون الكافي
+            for (const line of lines) {
+                if (!line.product_id) continue;
+                const product = db.prepare('SELECT name, stock_quantity, unit FROM products WHERE id = ?').get(line.product_id);
+                if (product && product.stock_quantity < line.quantity) {
+                    throw new Error(`Stock insuffisant pour "${product.name}": disponible ${product.stock_quantity} ${product.unit}, demandé ${line.quantity} ${product.unit}`);
+                }
+            }
             // BL بيع → خروج مخزون
             for (const line of lines) {
-                if (!line.product_id)
-                    continue;
+                if (!line.product_id) continue;
                 (0, stock_service_1.createStockMovement)(db, {
                     product_id: line.product_id,
                     type: 'out',
@@ -107,6 +114,15 @@ function confirmDocument(id, userId) {
                     applied: false,
                     created_by: userId,
                 });
+            }
+            // تحديث حالة الفاتورة المرتبطة
+            const linkedInvoice = db.prepare(`
+                SELECT d.id FROM document_links dl
+                JOIN documents d ON d.id = dl.parent_id
+                WHERE dl.child_id = ? AND d.type = 'invoice' AND d.status = 'confirmed'
+            `).get(id);
+            if (linkedInvoice) {
+                db.prepare(`UPDATE documents SET status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(linkedInvoice.id);
             }
         }
         else if (doc.type === 'bl_reception') {

@@ -140,6 +140,14 @@ export function confirmDocument(id: number, userId: number): void {
 
     // إنشاء حركات المخزون المعلقة
     if (doc.type === 'bl') {
+      // التحقق من المخزون الكافي قبل التأكيد
+      for (const line of lines) {
+        if (!line.product_id) continue
+        const product = db.prepare('SELECT name, stock_quantity, unit FROM products WHERE id = ?').get(line.product_id) as any
+        if (product && product.stock_quantity < line.quantity) {
+          throw new Error(`Stock insuffisant pour "${product.name}": disponible ${product.stock_quantity} ${product.unit}, demandé ${line.quantity} ${product.unit}`)
+        }
+      }
       // BL بيع → خروج مخزون
       for (const line of lines) {
         if (!line.product_id) continue
@@ -153,6 +161,16 @@ export function confirmDocument(id: number, userId: number): void {
           applied: false,
           created_by: userId,
         })
+      }
+
+      // تحديث حالة الفاتورة المرتبطة إذا وجدت
+      const linkedInvoice = db.prepare(`
+        SELECT d.id, d.total_ttc FROM document_links dl
+        JOIN documents d ON d.id = dl.parent_id
+        WHERE dl.child_id = ? AND d.type = 'invoice' AND d.status = 'confirmed'
+      `).get(id) as any
+      if (linkedInvoice) {
+        db.prepare(`UPDATE documents SET status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(linkedInvoice.id)
       }
     } else if (doc.type === 'bl_reception') {
       // Bon de réception → دخول مخزون

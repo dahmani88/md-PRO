@@ -22,6 +22,7 @@ function registerNotificationsHandlers() {
       LEFT JOIN suppliers s ON s.id = p.party_id AND p.party_type = 'supplier'
       WHERE p.method IN ('cheque', 'lcn')
         AND p.status = 'pending'
+        AND p.due_date IS NOT NULL
         AND p.due_date <= ?
       ORDER BY p.due_date ASC
     `).all(in7days);

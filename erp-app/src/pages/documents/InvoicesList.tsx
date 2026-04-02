@@ -173,6 +173,9 @@ export default function InvoicesList({ docType, hideNewButton = false }: Props) 
                   <span className={STATUS_BADGE[doc.status] ?? 'badge-gray'}>
                     {STATUS_LABEL[doc.status] ?? doc.status}
                   </span>
+                  {(doc as any).pending_stock_count > 0 && (
+                    <span className="ml-1 badge-orange text-xs" title="Mouvements de stock en attente">⚠️ Stock</span>
+                  )}
                 </td>
               </tr>
             ))}

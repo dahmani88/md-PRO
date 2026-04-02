@@ -13,6 +13,10 @@
     -webkit-user-select: text;
   }
 
+  /* خلايا الجداول — truncate تلقائي */
+  table { table-layout: fixed; width: 100%; }
+  td, th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { @apply bg-transparent; }

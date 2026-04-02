@@ -41,6 +41,7 @@ const api = {
   getStockMovements:  (filters?: unknown) => ipcRenderer.invoke('stock:getMovements', filters),
   applyStockMovement: (id: number)        => ipcRenderer.invoke('stock:applyMovement', id),
   createManualMovement: (data: unknown)   => ipcRenderer.invoke('stock:createManual', data),
+  getProductStats:      (id: number)      => ipcRenderer.invoke('stock:getProductStats', id),
 
   // --- Documents ---
   getDocuments:       (filters?: unknown) => ipcRenderer.invoke('documents:getAll', filters),
@@ -50,6 +51,7 @@ const api = {
   confirmDocument:    (id: number)        => ipcRenderer.invoke('documents:confirm', id),
   cancelDocument:     (id: number)        => ipcRenderer.invoke('documents:cancel', id),
   convertDocument:    (data: unknown)     => ipcRenderer.invoke('documents:convert', data),
+  linkDocuments:      (data: unknown)     => ipcRenderer.invoke('documents:link', data),
 
   // --- Payments ---
   getPayments:        (filters?: unknown) => ipcRenderer.invoke('payments:getAll', filters),

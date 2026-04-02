@@ -18,6 +18,7 @@ export default function PartyDetail({ id, type }: Omit<Props, 'onClose'> & { onC
   const [documents, setDocuments] = useState<Document[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [tab, setTab] = useState<Tab>('documents')
+  const [docTypeFilter, setDocTypeFilter] = useState<string>('all')
   const [paymentModal, setPaymentModal] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -49,6 +50,28 @@ export default function PartyDetail({ id, type }: Omit<Props, 'onClose'> & { onC
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
   const balance = totalInvoiced - totalPaid
 
+  const DOC_TYPES = [
+    { value: 'all',             label: 'Tous' },
+    { value: 'invoice',         label: 'Factures' },
+    { value: 'quote',           label: 'Devis' },
+    { value: 'bl',              label: 'Bons de Livraison' },
+    { value: 'proforma',        label: 'Proforma' },
+    { value: 'avoir',           label: 'Avoirs' },
+    { value: 'purchase_order',  label: 'Bons de Commande' },
+    { value: 'purchase_invoice',label: 'Factures Fournisseur' },
+  ]
+
+  const DOC_LABELS: Record<string, string> = {
+    invoice: 'Facture', quote: 'Devis', bl: 'Bon de Livraison',
+    proforma: 'Proforma', avoir: 'Avoir', purchase_order: 'Bon de Commande',
+    purchase_invoice: 'Facture Fourn.', bl_reception: 'Bon de Réception',
+    import_invoice: 'Importation',
+  }
+
+  const filteredDocs = docTypeFilter === 'all'
+    ? documents
+    : documents.filter(d => d.type === docTypeFilter)
+
   const STATUS_BADGE: Record<string, string> = {
     draft: 'badge-gray', confirmed: 'badge-blue', partial: 'badge-orange',
     paid: 'badge-green', cancelled: 'badge-red',
@@ -68,12 +91,12 @@ export default function PartyDetail({ id, type }: Omit<Props, 'onClose'> & { onC
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-800 dark:text-white">{party.name}</h2>
-            <div className="flex gap-4 mt-2 text-sm text-gray-500">
-              {party.phone && <span>📞 {party.phone}</span>}
-              {party.email && <span>✉️ {party.email}</span>}
-              {party.ice   && <span className="font-mono">ICE: {party.ice}</span>}
+            <div className="mt-2 space-y-1 text-sm text-gray-500">
+              {party.phone && <div>📞 {party.phone}</div>}
+              {party.email && <div>✉️ {party.email}</div>}
+              {party.ice   && <div className="font-mono">ICE: {party.ice}</div>}
+              {party.address && <div>📍 {party.address}</div>}
             </div>
-            {party.address && <div className="text-sm text-gray-400 mt-1">📍 {party.address}</div>}
           </div>
           <div className="text-right">
             <div className="text-xs text-gray-400 mb-1">Solde</div>
@@ -127,6 +150,19 @@ export default function PartyDetail({ id, type }: Omit<Props, 'onClose'> & { onC
       <div className="flex-1 overflow-auto p-4">
         {/* Documents */}
         {tab === 'documents' && (
+          <>
+            <div className="flex gap-1 flex-wrap mb-3">
+              {DOC_TYPES.filter(t => t.value === 'all' || documents.some(d => d.type === t.value)).map(t => (
+                <button key={t.value} onClick={() => setDocTypeFilter(t.value)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all
+                    ${docTypeFilter === t.value ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 hover:bg-gray-200'}`}>
+                  {t.label}
+                  {t.value !== 'all' && (
+                    <span className="ml-1 opacity-70">({documents.filter(d => d.type === t.value).length})</span>
+                  )}
+                </button>
+              ))}
+            </div>
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-700/50">
               <tr>
@@ -138,14 +174,14 @@ export default function PartyDetail({ id, type }: Omit<Props, 'onClose'> & { onC
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {documents.length === 0 && (
+              {filteredDocs.length === 0 && (
                 <tr><td colSpan={5} className="text-center py-8 text-gray-400">Aucun document</td></tr>
               )}
-              {documents.map(d => (
+              {filteredDocs.map(d => (
                 <tr key={d.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                   <td className="px-3 py-2 font-mono text-xs font-bold text-primary">{d.number}</td>
                   <td className="px-3 py-2 text-gray-500">{new Date(d.date).toLocaleDateString('fr-FR')}</td>
-                  <td className="px-3 py-2 text-gray-600 capitalize">{d.type}</td>
+                  <td className="px-3 py-2 text-gray-600">{DOC_LABELS[d.type] ?? d.type}</td>
                   <td className="px-3 py-2 text-right font-semibold">{fmt(d.total_ttc)} MAD</td>
                   <td className="px-3 py-2 text-center">
                     <span className={STATUS_BADGE[d.status] ?? 'badge-gray'}>{d.status}</span>
@@ -154,6 +190,7 @@ export default function PartyDetail({ id, type }: Omit<Props, 'onClose'> & { onC
               ))}
             </tbody>
           </table>
+          </>
         )}
 
         {/* Paiements */}

@@ -24,14 +24,33 @@ function registerSupplierHandlers() {
             : `SELECT COUNT(*) as c FROM suppliers WHERE is_deleted = 0`;
         const countParams = filters?.search ? [`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`] : [];
         const total = db.prepare(countQuery).get(...countParams).c;
-        return { rows, total, page, limit };
+        const rowsWithBalance = rows.map(supplier => {
+            const balance = db.prepare(`
+                SELECT COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
+                FROM documents d
+                LEFT JOIN payment_allocations pa ON pa.document_id = d.id
+                WHERE d.party_id = ? AND d.party_type = 'supplier'
+                  AND d.type IN ('purchase_invoice', 'import_invoice') AND d.is_deleted = 0
+                  AND d.status IN ('confirmed', 'partial', 'paid')
+            `).get(supplier.id).balance;
+            return { ...supplier, balance };
+        });
+        return { rows: rowsWithBalance, total, page, limit };
     });
     (0, index_1.handle)('suppliers:getOne', (id) => {
         const db = (0, connection_1.getDb)();
         const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ? AND is_deleted = 0').get(id);
         if (!supplier)
             throw new Error('Fournisseur introuvable');
-        return supplier;
+        const balance = db.prepare(`
+            SELECT COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
+            FROM documents d
+            LEFT JOIN payment_allocations pa ON pa.document_id = d.id
+            WHERE d.party_id = ? AND d.party_type = 'supplier'
+              AND d.type IN ('purchase_invoice', 'import_invoice') AND d.is_deleted = 0
+              AND d.status IN ('confirmed', 'partial', 'paid')
+        `).get(id).balance;
+        return { ...supplier, balance };
     });
     (0, index_1.handle)('suppliers:create', (data) => {
         const db = (0, connection_1.getDb)();

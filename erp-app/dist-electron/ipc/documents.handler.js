@@ -16,7 +16,8 @@ function registerDocumentHandlers() {
         CASE d.party_type
           WHEN 'client'   THEN c.name
           WHEN 'supplier' THEN s.name
-        END as party_name
+        END as party_name,
+        (SELECT COUNT(*) FROM stock_movements sm WHERE sm.document_id = d.id AND sm.applied = 0) as pending_stock_count
       FROM documents d
       LEFT JOIN clients   c ON c.id = d.party_id AND d.party_type = 'client'
       LEFT JOIN suppliers s ON s.id = d.party_id AND d.party_type = 'supplier'
@@ -108,6 +109,14 @@ function registerDocumentHandlers() {
         const source = db.prepare('SELECT * FROM documents WHERE id = ?').get(sourceId);
         if (!source)
             throw new Error('Document source introuvable');
+        if (source.type === 'quote' && targetType === 'invoice') {
+            const existing = db.prepare(`
+                SELECT d.id FROM document_links dl
+                JOIN documents d ON d.id = dl.child_id
+                WHERE dl.parent_id = ? AND d.type = 'invoice' AND d.status != 'cancelled'
+            `).get(sourceId);
+            if (existing) throw new Error('Ce devis a déjà été converti en facture');
+        }
         const sourceLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(sourceId);
         const newDoc = (0, document_service_1.createDocument)({
             type: targetType,
@@ -133,6 +142,11 @@ function registerDocumentHandlers() {
     (0, index_1.handle)('documents:update', (data) => {
         const db = (0, connection_1.getDb)();
         db.prepare(`UPDATE documents SET notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='draft'`).run(data.notes, data.id);
+        return { success: true };
+    });
+    (0, index_1.handle)('documents:link', ({ parentId, childId, linkType }) => {
+        const db = (0, connection_1.getDb)();
+        db.prepare('INSERT OR IGNORE INTO document_links (parent_id, child_id, link_type) VALUES (?, ?, ?)').run(parentId, childId, linkType);
         return { success: true };
     });
 }

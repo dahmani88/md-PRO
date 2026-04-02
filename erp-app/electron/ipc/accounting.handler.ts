@@ -77,8 +77,8 @@ export function registerAccountingHandlers(): void {
         COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0) as balance
       FROM accounts a
       LEFT JOIN journal_lines jl ON jl.account_id = a.id
-      LEFT JOIN journal_entries je ON je.id = jl.entry_id ${dateFilter ? 'AND 1=1' + dateFilter : ''}
-      WHERE a.is_active = 1
+      LEFT JOIN journal_entries je ON je.id = jl.entry_id
+      WHERE a.is_active = 1 ${dateFilter}
       GROUP BY a.id
       ORDER BY a.code ASC
     `).all(...params)

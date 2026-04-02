@@ -30,13 +30,23 @@ function sanitize(v: any): any {
   return v
 }
 
+const ALLOWED_CONFIG_FIELDS = new Set([
+  'company_name', 'company_ice', 'company_if', 'company_rc',
+  'company_address', 'company_phone', 'company_logo',
+  'mode', 'server_ip', 'server_port', 'currency', 'setup_done',
+])
+
 export function saveDeviceConfig(data: Partial<DeviceConfig>): void {
   const db = getDb()
   const existing = db.prepare('SELECT id FROM device_config WHERE id = 1').get()
 
   if (existing) {
-    const fields = Object.keys(data).map(k => `${k} = ?`).join(', ')
-    const values = Object.values(data).map(sanitize)
+    const safeData = Object.fromEntries(
+      Object.entries(data).filter(([k]) => ALLOWED_CONFIG_FIELDS.has(k))
+    )
+    if (Object.keys(safeData).length === 0) return
+    const fields = Object.keys(safeData).map(k => `${k} = ?`).join(', ')
+    const values = Object.values(safeData).map(sanitize)
     db.prepare(`UPDATE device_config SET ${fields} WHERE id = 1`).run(...values)
   } else {
     db.prepare(`

@@ -19,7 +19,8 @@ export function registerDocumentHandlers(): void {
         CASE d.party_type
           WHEN 'client'   THEN c.name
           WHEN 'supplier' THEN s.name
-        END as party_name
+        END as party_name,
+        (SELECT COUNT(*) FROM stock_movements sm WHERE sm.document_id = d.id AND sm.applied = 0) as pending_stock_count
       FROM documents d
       LEFT JOIN clients   c ON c.id = d.party_id AND d.party_type = 'client'
       LEFT JOIN suppliers s ON s.id = d.party_id AND d.party_type = 'supplier'
@@ -102,7 +103,14 @@ export function registerDocumentHandlers(): void {
 
   handle('documents:cancel', (id: number) => {
     const db = getDb()
-    const doc = db.prepare('SELECT status FROM documents WHERE id = ?').get(id) as any
+    const doc = db.prepare('SELECT status, type FROM documents WHERE id = ?').get(id) as any
+    if (!doc) throw new Error('Document introuvable')
+    if (doc.status === 'cancelled') throw new Error('Document déjà annulé')
+    if (doc.status === 'paid') throw new Error('Impossible d\'annuler un document payé')
+
+    // Annuler les mouvements de stock en attente liés à ce document
+    db.prepare(`UPDATE stock_movements SET applied = -1 WHERE document_id = ? AND applied = 0`).run(id)
+
     db.prepare(`UPDATE documents SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id)
     logAudit(db, { user_id: 1, action: 'CANCEL', table_name: 'documents', record_id: id, old_values: { status: doc?.status } })
     return { success: true }
@@ -112,6 +120,16 @@ export function registerDocumentHandlers(): void {
     const db = getDb()
     const source = db.prepare('SELECT * FROM documents WHERE id = ?').get(sourceId) as any
     if (!source) throw new Error('Document source introuvable')
+
+    // منع تحويل Devis لفاتورة أكثر من مرة
+    if (source.type === 'quote' && targetType === 'invoice') {
+      const existing = db.prepare(`
+        SELECT d.id FROM document_links dl
+        JOIN documents d ON d.id = dl.child_id
+        WHERE dl.parent_id = ? AND d.type = 'invoice' AND d.status != 'cancelled'
+      `).get(sourceId)
+      if (existing) throw new Error('Ce devis a déjà été converti en facture')
+    }
 
     const sourceLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(sourceId) as any[]
 
@@ -144,6 +162,12 @@ export function registerDocumentHandlers(): void {
   handle('documents:update', (data) => {
     const db = getDb()
     db.prepare(`UPDATE documents SET notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='draft'`).run(data.notes, data.id)
+    return { success: true }
+  })
+
+  handle('documents:link', ({ parentId, childId, linkType }) => {
+    const db = getDb()
+    db.prepare('INSERT OR IGNORE INTO document_links (parent_id, child_id, link_type) VALUES (?, ?, ?)').run(parentId, childId, linkType)
     return { success: true }
   })
 }

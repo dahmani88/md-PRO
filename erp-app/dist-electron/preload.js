@@ -37,6 +37,7 @@ const api = {
     getStockMovements: (filters) => electron_1.ipcRenderer.invoke('stock:getMovements', filters),
     applyStockMovement: (id) => electron_1.ipcRenderer.invoke('stock:applyMovement', id),
     createManualMovement: (data) => electron_1.ipcRenderer.invoke('stock:createManual', data),
+    getProductStats:      (id)   => electron_1.ipcRenderer.invoke('stock:getProductStats', id),
     // --- Documents ---
     getDocuments: (filters) => electron_1.ipcRenderer.invoke('documents:getAll', filters),
     getDocument: (id) => electron_1.ipcRenderer.invoke('documents:getOne', id),
@@ -45,6 +46,7 @@ const api = {
     confirmDocument: (id) => electron_1.ipcRenderer.invoke('documents:confirm', id),
     cancelDocument: (id) => electron_1.ipcRenderer.invoke('documents:cancel', id),
     convertDocument: (data) => electron_1.ipcRenderer.invoke('documents:convert', data),
+    linkDocuments:   (data) => electron_1.ipcRenderer.invoke('documents:link', data),
     // --- Payments ---
     getPayments: (filters) => electron_1.ipcRenderer.invoke('payments:getAll', filters),
     createPayment: (data) => electron_1.ipcRenderer.invoke('payments:create', data),

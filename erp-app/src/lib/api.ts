@@ -55,6 +55,7 @@ export const api = {
   getStockMovements:    (f?: unknown) => call(() => window.api.getStockMovements(f),    () => mockApi.getStockMovements()),
   applyStockMovement:   (id: number)  => call(() => window.api.applyStockMovement(id),  () => mockApi.applyStockMovement()),
   createManualMovement: (d: unknown)  => call(() => window.api.createManualMovement(d), () => mockApi.createManualMovement()),
+  getProductStats:      (id: number)  => call(() => window.api.getProductStats(id),      () => Promise.resolve({ success: true, data: null })),
 
   // Documents
   getDocuments:    (f?: unknown) => call(() => window.api.getDocuments(f),    () => mockApi.getDocuments()),
@@ -64,6 +65,7 @@ export const api = {
   confirmDocument: (id: number)  => call(() => window.api.confirmDocument(id),() => mockApi.confirmDocument()),
   cancelDocument:  (id: number)  => call(() => window.api.cancelDocument(id), () => mockApi.cancelDocument()),
   convertDocument: (d: unknown)  => call(() => window.api.convertDocument(d), () => mockApi.convertDocument()),
+  linkDocuments:   (d: unknown)  => call(() => window.api.linkDocuments(d),   () => Promise.resolve({ success: true, data: null })),
 
   // Payments
   getPayments:     (f?: unknown) => call(() => window.api.getPayments(f),    () => mockApi.getPayments()),

@@ -122,6 +122,34 @@ const ENTRY_HANDLERS = {
         ];
         return insertEntry(db, doc, `Importation ${doc.number}`, entryLines, userId);
     },
+    // BL Bon de Livraison
+    bl: (db, doc, lines, userId) => {
+        const linkedInvoice = db.prepare(`SELECT d.id FROM document_links dl JOIN documents d ON d.id = dl.parent_id WHERE dl.child_id = ? AND d.type = 'invoice'`).get(doc.id);
+        let totalCmup = 0;
+        for (const line of lines) {
+            if (!line.product_id) continue;
+            const product = db.prepare('SELECT cmup_price FROM products WHERE id = ?').get(line.product_id);
+            totalCmup += (product?.cmup_price ?? 0) * line.quantity;
+        }
+        if (linkedInvoice) {
+            if (totalCmup === 0) return insertEntry(db, doc, `BL ${doc.number}`, [], userId);
+            return insertEntry(db, doc, `Livraison ${doc.number}`, [
+                { accountCode: ACC.VENTES_MARCH, debit: totalCmup, credit: 0, notes: 'Sortie stock au CMUP' },
+                { accountCode: ACC.STOCK_PRODUITS, debit: 0, credit: totalCmup },
+            ], userId);
+        }
+        const tvaByRate = groupTvaByRate(lines);
+        const entryLines = [
+            { accountCode: ACC.CLIENTS, debit: doc.total_ttc, credit: 0 },
+            { accountCode: ACC.VENTES_MARCH, debit: 0, credit: doc.total_ht },
+            ...tvaByRate.map(t => ({ accountCode: ACC.TVA_FACTUREE, debit: 0, credit: t.amount, notes: `TVA ${t.rate}%` })),
+            ...(totalCmup > 0 ? [
+                { accountCode: ACC.VENTES_MARCH, debit: totalCmup, credit: 0, notes: 'Sortie stock au CMUP' },
+                { accountCode: ACC.STOCK_PRODUITS, debit: 0, credit: totalCmup },
+            ] : []),
+        ];
+        return insertEntry(db, doc, `Bon de livraison ${doc.number}`, entryLines, userId);
+    },
     // ⑧ Avoir retour client
     avoir: (db, doc, lines, userId) => {
         const tvaByRate = groupTvaByRate(lines);

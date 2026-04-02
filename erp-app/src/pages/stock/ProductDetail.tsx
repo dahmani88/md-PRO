@@ -5,12 +5,13 @@ import type { Product, StockMovement } from '../../types'
 
 interface Props { id: number; onClose?: () => void; onStockChanged?: () => void }
 
-type Tab = 'movements' | 'info'
+type Tab = 'movements' | 'info' | 'analyse'
 
 export default function ProductDetail({ id, onStockChanged }: Props) {
   const [product, setProduct] = useState<Product | null>(null)
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [tab, setTab] = useState<Tab>('movements')
+  const [stats, setStats] = useState<any>(null)
   const [manualModal, setManualModal] = useState(false)
   const [manualForm, setManualForm] = useState({ type: 'in', quantity: 1, unit_cost: 0, notes: '' })
   const [saving, setSaving] = useState(false)
@@ -21,12 +22,14 @@ export default function ProductDetail({ id, onStockChanged }: Props) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, m] = await Promise.all([
+      const [p, m, s] = await Promise.all([
         api.getProduct(id) as unknown as Promise<Product>,
         api.getStockMovements({ product_id: id }) as Promise<StockMovement[]>,
+        api.getProductStats(id) as Promise<any>,
       ])
       setProduct(p)
       setMovements(m ?? [])
+      setStats(s)
     } finally { setLoading(false) }
   }, [id])
 
@@ -113,6 +116,7 @@ export default function ProductDetail({ id, onStockChanged }: Props) {
         <div className="flex gap-1 py-1.5">
           {([
             { id: 'movements', label: `Mouvements (${movements.length})` },
+            { id: 'analyse',   label: '📊 Analyse' },
             { id: 'info',      label: 'Informations' },
           ] as const).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -185,6 +189,104 @@ export default function ProductDetail({ id, onStockChanged }: Props) {
               ))}
             </tbody>
           </table>
+        )}
+
+        {tab === 'analyse' && stats && (
+          <div className="space-y-4 max-w-2xl">
+            {/* KPIs */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Qté vendue (total)', value: `${fmt(stats.sales?.qty ?? 0)} ${product.unit}`, sub: `${stats.sales?.doc_count ?? 0} facture(s)`, color: 'text-blue-600' },
+                { label: 'CA généré', value: `${fmt(stats.sales?.revenue ?? 0)} MAD`, sub: `Prix vente: ${fmt(product.sale_price)} MAD`, color: 'text-green-600' },
+                { label: 'Qté achetée (total)', value: `${fmt(stats.purchases?.qty ?? 0)} ${product.unit}`, sub: `${stats.purchases?.doc_count ?? 0} achat(s)`, color: 'text-gray-600' },
+                { label: 'Coût total achats', value: `${fmt(stats.purchases?.cost ?? 0)} MAD`, sub: `CMUP: ${fmt(product.cmup_price)} MAD`, color: 'text-gray-600' },
+              ].map(k => (
+                <div key={k.label} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <div className="text-xs text-gray-400 mb-1">{k.label}</div>
+                  <div className={`text-lg font-bold ${k.color}`}>{k.value}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{k.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Demandes en cours */}
+            {(stats.pending?.qty > 0 || stats.pendingPurchase?.qty > 0) && (
+              <div className="border border-orange-200 dark:border-orange-800 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/10">
+                <div className="text-sm font-medium text-orange-700 dark:text-orange-400 mb-3">⏳ En cours</div>
+                <div className="space-y-2">
+                  {stats.pending?.qty > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Devis + BL confirmés (à livrer)</span>
+                      <span className="font-bold text-orange-600">{fmt(stats.pending.qty)} {product.unit} ({stats.pending.doc_count} doc)</span>
+                    </div>
+                  )}
+                  {stats.pendingPurchase?.qty > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Bons de commande (à recevoir)</span>
+                      <span className="font-bold text-blue-600">{fmt(stats.pendingPurchase.qty)} {product.unit} ({stats.pendingPurchase.doc_count} doc)</span>
+                    </div>
+                  )}
+                  {stats.pending?.qty > 0 && (
+                    <div className="flex justify-between text-sm border-t border-orange-200 pt-2 mt-2">
+                      <span className="text-gray-600 font-medium">Stock disponible après livraisons</span>
+                      <span className={`font-bold ${product.stock_quantity - stats.pending.qty < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                        {fmt(product.stock_quantity - stats.pending.qty)} {product.unit}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Marge */}
+            {product.cmup_price > 0 && product.sale_price > 0 && (
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">💹 Rentabilité</div>
+                <div className="space-y-2 text-sm">
+                  {[
+                    { label: 'Prix de vente', value: `${fmt(product.sale_price)} MAD` },
+                    { label: 'Coût (CMUP)', value: `${fmt(product.cmup_price)} MAD` },
+                    { label: 'Marge unitaire', value: `${fmt(product.sale_price - product.cmup_price)} MAD` },
+                    { label: 'Taux de marge', value: `${product.sale_price > 0 ? ((product.sale_price - product.cmup_price) / product.sale_price * 100).toFixed(1) : 0}%` },
+                  ].map(r => (
+                    <div key={r.label} className="flex justify-between">
+                      <span className="text-gray-500">{r.label}</span>
+                      <span className="font-medium">{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* آخر المستندات */}
+            {stats.recentDocs?.length > 0 && (
+              <div>
+                <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">🔗 Derniers documents</div>
+                <div className="space-y-1">
+                  {stats.recentDocs.map((d: any) => {
+                    const typeColors: Record<string, string> = {
+                      invoice: 'badge-blue', quote: 'badge-gray', bl: 'badge-green',
+                      purchase_invoice: 'badge-orange', import_invoice: 'badge-orange',
+                      bl_reception: 'badge-green', purchase_order: 'badge-gray',
+                    }
+                    return (
+                      <div key={d.id} className="flex items-center gap-2 text-xs bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2">
+                        <span className={typeColors[d.type] ?? 'badge-gray'}>{d.type}</span>
+                        <span className="font-mono text-primary">{d.number}</span>
+                        <span className="text-gray-400">{new Date(d.date).toLocaleDateString('fr-FR')}</span>
+                        {d.party_name && <span className="text-gray-500 truncate">{d.party_name}</span>}
+                        <span className="ml-auto font-semibold">{fmt(d.quantity)} {product.unit}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'analyse' && !stats && (
+          <div className="flex items-center justify-center h-32 text-gray-400">Chargement...</div>
         )}
 
         {tab === 'info' && (

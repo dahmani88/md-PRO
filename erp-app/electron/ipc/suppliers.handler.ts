@@ -26,14 +26,39 @@ export function registerSupplierHandlers(): void {
       : `SELECT COUNT(*) as c FROM suppliers WHERE is_deleted = 0`
     const countParams = filters?.search ? [`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`] : []
     const total = (db.prepare(countQuery).get(...countParams) as any).c
-    return { rows, total, page, limit }
+
+    // إضافة balance لكل مورد
+    const rowsWithBalance = (rows as any[]).map(supplier => {
+      const balance = (db.prepare(`
+        SELECT COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
+        FROM documents d
+        LEFT JOIN payment_allocations pa ON pa.document_id = d.id
+        WHERE d.party_id = ? AND d.party_type = 'supplier'
+          AND d.type IN ('purchase_invoice', 'import_invoice') AND d.is_deleted = 0
+          AND d.status IN ('confirmed', 'partial', 'paid')
+      `).get(supplier.id) as any).balance
+      return { ...supplier, balance }
+    })
+
+    return { rows: rowsWithBalance, total, page, limit }
   })
 
   handle('suppliers:getOne', (id: number) => {
     const db = getDb()
     const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ? AND is_deleted = 0').get(id)
     if (!supplier) throw new Error('Fournisseur introuvable')
-    return supplier
+
+    // Solde: somme des TTC non payées (fac confirmées uniquement)
+    const balance = (db.prepare(`
+      SELECT COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
+      FROM documents d
+      LEFT JOIN payment_allocations pa ON pa.document_id = d.id
+      WHERE d.party_id = ? AND d.party_type = 'supplier'
+        AND d.type IN ('purchase_invoice', 'import_invoice') AND d.is_deleted = 0
+        AND d.status IN ('confirmed', 'partial', 'paid')
+    `).get(id) as any).balance
+
+    return { ...supplier, balance }
   })
 
   handle('suppliers:create', (data) => {

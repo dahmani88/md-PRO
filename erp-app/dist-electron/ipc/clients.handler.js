@@ -24,7 +24,18 @@ function registerClientHandlers() {
             : `SELECT COUNT(*) as c FROM clients WHERE is_deleted = 0`;
         const countParams = filters?.search ? [`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`] : [];
         const total = db.prepare(countQuery).get(...countParams).c;
-        return { rows, total, page, limit };
+        const rowsWithBalance = rows.map(client => {
+            const balance = db.prepare(`
+                SELECT COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
+                FROM documents d
+                LEFT JOIN payment_allocations pa ON pa.document_id = d.id
+                WHERE d.party_id = ? AND d.party_type = 'client'
+                  AND d.type = 'invoice' AND d.is_deleted = 0
+                  AND d.status IN ('confirmed', 'partial', 'paid')
+            `).get(client.id).balance;
+            return { ...client, balance };
+        });
+        return { rows: rowsWithBalance, total, page, limit };
     });
     (0, index_1.handle)('clients:getOne', (id) => {
         const db = (0, connection_1.getDb)();
@@ -38,7 +49,7 @@ function registerClientHandlers() {
       LEFT JOIN payment_allocations pa ON pa.document_id = d.id
       WHERE d.party_id = ? AND d.party_type = 'client'
         AND d.type = 'invoice' AND d.is_deleted = 0
-        AND d.status != 'cancelled'
+        AND d.status IN ('confirmed', 'partial', 'paid')
     `).get(id).balance;
         return { ...client, balance };
     });

@@ -43,4 +43,13 @@ function registerStockHandlers() {
         });
         return { id };
     });
+    (0, index_1.handle)('stock:getProductStats', (productId) => {
+        const db = (0, connection_1.getDb)();
+        const sales = db.prepare(`SELECT COALESCE(SUM(dl.quantity),0) as qty, COALESCE(SUM(dl.total_ttc),0) as revenue, COUNT(DISTINCT d.id) as doc_count FROM document_lines dl JOIN documents d ON d.id=dl.document_id WHERE dl.product_id=? AND d.type='invoice' AND d.status IN ('confirmed','partial','paid') AND d.is_deleted=0`).get(productId);
+        const purchases = db.prepare(`SELECT COALESCE(SUM(dl.quantity),0) as qty, COALESCE(SUM(dl.total_ttc),0) as cost, COUNT(DISTINCT d.id) as doc_count FROM document_lines dl JOIN documents d ON d.id=dl.document_id WHERE dl.product_id=? AND d.type IN ('purchase_invoice','import_invoice','bl_reception') AND d.status IN ('confirmed','partial','paid') AND d.is_deleted=0`).get(productId);
+        const pending = db.prepare(`SELECT COALESCE(SUM(dl.quantity),0) as qty, COUNT(DISTINCT d.id) as doc_count FROM document_lines dl JOIN documents d ON d.id=dl.document_id WHERE dl.product_id=? AND d.type IN ('quote','bl') AND d.status='confirmed' AND d.is_deleted=0`).get(productId);
+        const pendingPurchase = db.prepare(`SELECT COALESCE(SUM(dl.quantity),0) as qty, COUNT(DISTINCT d.id) as doc_count FROM document_lines dl JOIN documents d ON d.id=dl.document_id WHERE dl.product_id=? AND d.type='purchase_order' AND d.status='confirmed' AND d.is_deleted=0`).get(productId);
+        const recentDocs = db.prepare(`SELECT d.id, d.number, d.type, d.date, d.status, dl.quantity, CASE d.party_type WHEN 'client' THEN c.name WHEN 'supplier' THEN s.name END as party_name FROM document_lines dl JOIN documents d ON d.id=dl.document_id LEFT JOIN clients c ON c.id=d.party_id AND d.party_type='client' LEFT JOIN suppliers s ON s.id=d.party_id AND d.party_type='supplier' WHERE dl.product_id=? AND d.is_deleted=0 ORDER BY d.date DESC LIMIT 8`).all(productId);
+        return { sales, purchases, pending, pendingPurchase, recentDocs };
+    });
 }
