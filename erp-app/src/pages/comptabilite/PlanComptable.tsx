@@ -44,6 +44,12 @@ export default function PlanComptable() {
 
   useEffect(() => { load() }, [])
 
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('app:refresh', h)
+    return () => window.removeEventListener('app:refresh', h)
+  }, [])
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setFormError('')

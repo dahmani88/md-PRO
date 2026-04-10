@@ -230,12 +230,24 @@ describe('2. Confirmation de documents', () => {
     expect(() => confirmDocument(id, 1)).toThrow('Stock insuffisant')
   })
 
-  it('BL lié à facture → facture passe à delivered', () => {
+  it('BL lié à facture avec quantité partielle → facture passe à partial', () => {
     const invId = makeInvoice(db)
     const { id: blId } = createDocument({ type:'bl', date:'2026-01-16', party_id:1, party_type:'client', lines:[{product_id:1,quantity:5,unit_price:120,tva_rate:20}], created_by:1 })
     db.prepare('INSERT INTO document_links (parent_id,child_id,link_type) VALUES (?,?,?)').run(invId, blId, 'invoice_to_bl')
     confirmDocument(blId, 1)
-    expect(getDocStatus(db, invId)).toBe('delivered')
+    // BL partiel (5 sur 10) → facture passe à partial
+    expect(getDocStatus(db, invId)).toBe('partial')
+  })
+
+  it('BL lié à facture avec quantité totale → facture passe à delivered', () => {
+    // Facture pour 5 unités
+    const inv = createDocument({ type:'invoice', date:'2026-01-15', party_id:1, party_type:'client', lines:[{product_id:1,quantity:5,unit_price:120,tva_rate:20}], created_by:1 })
+    confirmDocument(inv.id, 1)
+    const { id: blId } = createDocument({ type:'bl', date:'2026-01-16', party_id:1, party_type:'client', lines:[{product_id:1,quantity:5,unit_price:120,tva_rate:20}], created_by:1 })
+    db.prepare('INSERT INTO document_links (parent_id,child_id,link_type) VALUES (?,?,?)').run(inv.id, blId, 'invoice_to_bl')
+    confirmDocument(blId, 1)
+    // BL complet → facture passe à delivered
+    expect(getDocStatus(db, inv.id)).toBe('delivered')
   })
 
   it('BL_RECEPTION → crée mouvement stock entrant en attente', () => {

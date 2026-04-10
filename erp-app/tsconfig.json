@@ -19,8 +19,12 @@
     "paths": {
       "@/*": ["src/*"],
       "@electron/*": ["electron/*"]
-    }
+    },
+    "types": ["jest", "node"]
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "electron"],
+  "references": [
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.electron.json" }
+  ]
 }

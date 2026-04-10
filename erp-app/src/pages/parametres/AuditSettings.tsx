@@ -48,6 +48,12 @@ export default function AuditSettings() {
     load()
   }, [page])
 
+  useEffect(() => {
+    const h = () => { api.getAuditUsers().then(setUsers).catch(() => {}); load() }
+    window.addEventListener('app:refresh', h)
+    return () => window.removeEventListener('app:refresh', h)
+  }, [])
+
   async function load() {
     setLoading(true)
     try {

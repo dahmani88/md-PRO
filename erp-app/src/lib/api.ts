@@ -67,7 +67,19 @@ export const api = {
   cancelDocument:  (id: number)  => call(() => window.api.cancelDocument(id), () => mockApi.cancelDocument()),
   convertDocument: (d: unknown)  => call(() => window.api.convertDocument(d), () => mockApi.convertDocument()),
   linkDocuments:   (d: unknown)  => call(() => window.api.linkDocuments(d),   () => Promise.resolve({ success: true, data: null })),
-  getPOReceiptStatus:  (id: number)  => call(() => window.api.getPOReceiptStatus(id),  () => Promise.resolve({ summary: [], fullyReceived: false, brCount: 0 })),
+  getPOReceiptStatus:  (id: number)  => call(() => window.api.getPOReceiptStatus(id),  () => Promise.resolve({ success: true, data: { summary: [], fullyReceived: false, brCount: 0 } })),
+  getBLDeliveryStatus: (id: number)  => call(
+    () => typeof window.api.getBLDeliveryStatus === 'function'
+      ? window.api.getBLDeliveryStatus(id)
+      : Promise.resolve({ success: true, data: { summary: [], fullyDelivered: false, blCount: 0 } }),
+    () => Promise.resolve({ success: true, data: { summary: [], fullyDelivered: false, blCount: 0 } })
+  ),
+  getDocumentTimeline: (id: number)  => call(
+    () => typeof window.api.getDocumentTimeline === 'function'
+      ? window.api.getDocumentTimeline(id)
+      : Promise.resolve({ success: true, data: [] }),
+    () => Promise.resolve({ success: true, data: [] })
+  ),
   getCancelImpact:     (id: number)  => call(() => window.api.getCancelImpact(id),     () => Promise.resolve({ impacts: [], docType: '', docStatus: '' })),
   cancelWithOptions:   (d: unknown)  => call(() => window.api.cancelWithOptions(d),    () => Promise.resolve({ success: true })),
 
@@ -148,16 +160,40 @@ export const api = {
   attachmentsDelete: (p: string)  => call(() => window.api.attachmentsDelete(p), () => Promise.resolve({ success: true, data: null })),
 
   // Audit
+  getUserStats: (id: number) => call(
+    () => typeof (window.api as any).getUserStats === 'function'
+      ? (window.api as any).getUserStats(id)
+      : Promise.resolve({ success: true, data: null }),
+    () => Promise.resolve({ success: true, data: null })
+  ),
   getAuditLog:  (f?: unknown) => call(() => window.api.auditGetLog(f),   () => Promise.resolve({ success: true, data: { rows: [], total: 0, page: 1, limit: 100 } })),
   getAuditUsers:()            => call(() => window.api.auditGetUsers(),  () => Promise.resolve({ success: true, data: [] })),
 
   // Accounting extra
   createAccount: (d: unknown) => call(() => window.api.createAccount(d), () => Promise.resolve({ success: true, data: { id: 1 } })),
   getTvaRates:   ()           => call(() => window.api.getTvaRates(),     () => Promise.resolve({ success: true, data: [
-    { id: 1, rate: 0, label: 'Exonéré (0%)', is_active: true },
-    { id: 2, rate: 7, label: 'TVA 7%', is_active: true },
-    { id: 3, rate: 10, label: 'TVA 10%', is_active: true },
-    { id: 4, rate: 14, label: 'TVA 14%', is_active: true },
-    { id: 5, rate: 20, label: 'TVA 20%', is_active: true },
+    { id: 1, rate: 0,  label: 'Exonéré (0%)', is_active: true },
+    { id: 2, rate: 7,  label: 'TVA 7%',        is_active: true },
+    { id: 3, rate: 10, label: 'TVA 10%',       is_active: true },
+    { id: 4, rate: 14, label: 'TVA 14%',       is_active: true },
+    { id: 5, rate: 20, label: 'TVA 20%',       is_active: true },
   ]})),
+  createTvaRate: (d: unknown) => call(() => (window.api as any).createTvaRate(d), () => Promise.resolve({ success: true, data: { id: 0 } })),
+
+  // Sync & Network
+  syncDeviceInfo:      () => call(() => (window.api as any).syncDeviceInfo(),       () => Promise.resolve({ success: true, data: null })),
+  syncGetDevices:      () => call(() => (window.api as any).syncGetDevices(),       () => Promise.resolve({ success: true, data: [] })),
+  syncPull:            () => call(() => (window.api as any).syncPull(),             () => Promise.resolve({ success: true, data: { applied: 0 } })),
+  syncPush:            () => call(() => (window.api as any).syncPush(),             () => Promise.resolve({ success: true, data: { applied: 0 } })),
+  syncInitialSnapshot: () => call(() => (window.api as any).syncInitialSnapshot(),  () => Promise.resolve({ success: true, data: { applied: 0 } })),
+  syncTestConnection:  (d?: unknown) => call(() => (window.api as any).syncTestConnection(d), () => Promise.resolve({ success: true, data: { ok: false } })),
+  syncGetApiKey:       () => call(() => (window.api as any).syncGetApiKey(),        () => Promise.resolve({ success: true, data: { apiKey: '' } })),
+
+  // Updates
+  updateCheck:    () => call(() => (window.api as any).updateCheck(),              () => Promise.resolve({ success: true, data: null })),
+  updateDownload: (v: string) => call(() => (window.api as any).updateDownload(v), () => Promise.resolve({ success: true, data: null })),
+  updateVerify:   (d: unknown) => call(() => (window.api as any).updateVerify(d),  () => Promise.resolve({ success: true, data: { valid: false } })),
+  updateInstall:  (p: string) => call(() => (window.api as any).updateInstall(p),  () => Promise.resolve({ success: true, data: null })),
+  updatePublish:  (d: unknown) => call(() => (window.api as any).updatePublish(d), () => Promise.resolve({ success: true, data: null })),
+  updateList:     () => call(() => (window.api as any).updateList(),               () => Promise.resolve({ success: true, data: [] })),
 }

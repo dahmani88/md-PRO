@@ -9,6 +9,12 @@ export default function BackupSettings() {
 
   useEffect(() => { loadBackups() }, [])
 
+  useEffect(() => {
+    const h = () => loadBackups()
+    window.addEventListener('app:refresh', h)
+    return () => window.removeEventListener('app:refresh', h)
+  }, [])
+
   async function loadBackups() {
     setLoading(true)
     try { setBackups(await api.listBackups() as any[]) }

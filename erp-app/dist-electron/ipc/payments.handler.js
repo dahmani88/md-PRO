@@ -10,10 +10,12 @@ function registerPaymentHandlers() {
         const db = (0, connection_1.getDb)();
         let query = `
       SELECT p.*,
-        CASE p.party_type WHEN 'client' THEN c.name WHEN 'supplier' THEN s.name END as party_name
+        CASE p.party_type WHEN 'client' THEN c.name WHEN 'supplier' THEN s.name END as party_name,
+        d.number as document_number
       FROM payments p
       LEFT JOIN clients   c ON c.id = p.party_id AND p.party_type = 'client'
       LEFT JOIN suppliers s ON s.id = p.party_id AND p.party_type = 'supplier'
+      LEFT JOIN documents d ON d.id = p.document_id
       WHERE 1=1
     `;
         const params = [];
@@ -33,7 +35,11 @@ function registerPaymentHandlers() {
             query += ' AND p.document_id = ?';
             params.push(filters.document_id);
         }
-        query += ' ORDER BY p.date DESC';
+        query += ' ORDER BY p.created_at DESC, p.id DESC';
+        const limit = filters?.limit ?? 200;
+        const offset = filters?.offset ?? 0;
+        query += ' LIMIT ? OFFSET ?';
+        params.push(limit, offset);
         return db.prepare(query).all(...params);
     });
     (0, index_1.handle)('payments:create', (data) => {
@@ -52,7 +58,7 @@ function registerPaymentHandlers() {
                 db.prepare('INSERT INTO payment_allocations (payment_id, document_id, amount) VALUES (?, ?, ?)').run(paymentId, data.document_id, data.amount);
                 updateInvoicePaymentStatus(db, data.document_id);
             }
-            // قيد محاسبي فقط للمدفوعات الفعلية
+            // قيد محاسبي تلقائي فقط للمدفوعات الفعلية (ليس الشيكات المعلقة)
             if (!(isCheque && isPending)) {
                 (0, accounting_service_1.createPaymentEntry)(db, {
                     id: paymentId,
@@ -120,23 +126,39 @@ function registerPaymentHandlers() {
 }
 function updateInvoicePaymentStatus(db, documentId) {
     const doc = db.prepare('SELECT total_ttc, type, status FROM documents WHERE id = ?').get(documentId);
-    if (!doc || ['cancelled', 'delivered'].includes(doc.status)) return;
+    if (!doc || doc.status === 'cancelled')
+        return;
     const paid = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM payment_allocations WHERE document_id = ?').get(documentId).total;
     let payStatus = 'unpaid';
-    if (paid >= doc.total_ttc - 0.01) payStatus = 'paid';
-    else if (paid > 0) payStatus = 'partial';
+    if (paid >= doc.total_ttc - 0.01)
+        payStatus = 'paid';
+    else if (paid > 0)
+        payStatus = 'partial';
+    // تحديث الجدول الفرعي المناسب
     if (doc.type === 'invoice') {
         db.prepare('UPDATE doc_invoices SET payment_status = ? WHERE document_id = ?').run(payStatus, documentId);
-    } else if (doc.type === 'purchase_invoice') {
+    }
+    else if (doc.type === 'purchase_invoice') {
         db.prepare('UPDATE doc_purchase_invoices SET payment_status = ? WHERE document_id = ?').run(payStatus, documentId);
-    } else if (doc.type === 'import_invoice') {
+    }
+    else if (doc.type === 'import_invoice') {
         db.prepare('UPDATE doc_import_invoices SET payment_status = ? WHERE document_id = ?').run(payStatus, documentId);
     }
+    // تحديث حالة المستند الرئيسي
     if (payStatus === 'paid') {
+        // مدفوع بالكامل — دائماً paid بغض النظر عن حالة التوصيل
         db.prepare(`UPDATE documents SET status = 'paid', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(documentId);
-    } else if (payStatus === 'partial') {
-        db.prepare(`UPDATE documents SET status = 'partial', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(documentId);
-    } else {
-        db.prepare(`UPDATE documents SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('paid', 'partial')`).run(documentId);
+    }
+    else if (payStatus === 'partial') {
+        // دفع جزئي — لا نغير delivered إلى partial
+        if (!['delivered', 'paid'].includes(doc.status)) {
+            db.prepare(`UPDATE documents SET status = 'partial', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(documentId);
+        }
+    }
+    else {
+        // لا دفع — إعادة إلى confirmed عند إلغاء الدفعة (bounce شيك مثلاً)
+        if (['paid', 'partial'].includes(doc.status)) {
+            db.prepare(`UPDATE documents SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(documentId);
+        }
     }
 }

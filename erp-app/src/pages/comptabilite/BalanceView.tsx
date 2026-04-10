@@ -18,6 +18,12 @@ export default function BalanceView() {
 
   useEffect(() => { load() }, [])
 
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('app:refresh', h)
+    return () => window.removeEventListener('app:refresh', h)
+  }, [])
+
   const fmt = (n: number) => new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(n)
 
   const totalDebit  = rows.reduce((s, r) => s + r.total_debit, 0)
@@ -122,7 +128,7 @@ export default function BalanceView() {
               )
             })}
           </tbody>
-          <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20 sticky bottom-0">
+          <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20 sticky bottom-0 z-10">
             <tr>
               <td colSpan={2} className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">TOTAUX</td>
               <td className="px-4 py-3 text-right text-green-700">{fmt(totalDebit)}</td>

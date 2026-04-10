@@ -197,8 +197,10 @@ export default function ProductDetail({ id, onStockChanged }: Props) {
             {/* KPIs */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Qté vendue (total)', value: `${fmt(stats.sales?.qty ?? 0)} ${product.unit}`, sub: `${stats.sales?.doc_count ?? 0} facture(s)`, color: 'text-blue-600' },
-                { label: 'CA généré', value: `${fmt(stats.sales?.revenue ?? 0)} MAD`, sub: `Prix vente: ${fmt(product.sale_price)} MAD`, color: 'text-green-600' },
+                ...(product.type !== 'raw' ? [
+                  { label: 'Qté vendue (total)', value: `${fmt(stats.sales?.qty ?? 0)} ${product.unit}`, sub: `${stats.sales?.doc_count ?? 0} facture(s)`, color: 'text-blue-600' },
+                  { label: 'CA généré', value: `${fmt(stats.sales?.revenue ?? 0)} MAD`, sub: `Prix vente: ${fmt(product.sale_price)} MAD`, color: 'text-green-600' },
+                ] : []),
                 { label: 'Qté achetée (total)', value: `${fmt(stats.purchases?.qty ?? 0)} ${product.unit}`, sub: `${stats.purchases?.doc_count ?? 0} achat(s)`, color: 'text-gray-600' },
                 { label: 'Coût total achats', value: `${fmt(stats.purchases?.cost ?? 0)} MAD`, sub: `CMUP: ${fmt(product.cmup_price)} MAD`, color: 'text-gray-600' },
               ].map(k => (
@@ -240,7 +242,7 @@ export default function ProductDetail({ id, onStockChanged }: Props) {
             )}
 
             {/* Marge */}
-            {product.cmup_price > 0 && product.sale_price > 0 && (
+            {product.type !== 'raw' && product.cmup_price > 0 && product.sale_price > 0 && (
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">💹 Rentabilité</div>
                 <div className="space-y-2 text-sm">
@@ -295,9 +297,9 @@ export default function ProductDetail({ id, onStockChanged }: Props) {
             {[
               { label: 'Code',          value: product.code },
               { label: 'Désignation',   value: product.name },
-              { label: 'Type',          value: product.type },
+              { label: 'Type',          value: product.type === 'raw' ? 'Matière première' : product.type === 'finished' ? 'Produit fini' : 'Semi-fini' },
               { label: 'Unité',         value: product.unit },
-              { label: 'Prix de vente', value: `${fmt(product.sale_price)} MAD` },
+              ...(product.type !== 'raw' ? [{ label: 'Prix de vente', value: `${fmt(product.sale_price)} MAD` }] : []),
               { label: 'Stock minimum', value: `${fmt(product.min_stock)} ${product.unit}` },
             ].map(f => (
               <div key={f.label} className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">

@@ -35,6 +35,12 @@ export default function JournalView() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('app:refresh', h)
+    return () => window.removeEventListener('app:refresh', h)
+  }, [load])
+
   // reset page عند تغيير الفلاتر
   useEffect(() => { setPage(1) }, [startDate, endDate])
 
@@ -86,34 +92,40 @@ export default function JournalView() {
               <span className="text-gray-400 text-xs">{expanded === e.id ? '▲' : '▼'}</span>
             </button>
             {expanded === e.id && e.lines && (
-              <table className="w-full text-xs border-t border-gray-100 dark:border-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
+              <table className="w-full text-xs border-t border-gray-100 dark:border-gray-700 border-collapse" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '80px' }} />
+                  <col />
+                  <col style={{ width: '120px' }} />
+                  <col style={{ width: '120px' }} />
+                </colgroup>
+                <thead className="bg-gray-50 dark:bg-gray-700/50 [&_th]:border [&_th]:border-gray-200 dark:[&_th]:border-gray-600">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Compte</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Intitulé</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-500">Débit</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-500">Crédit</th>
+                    <th className="px-4 py-2 text-center align-middle font-medium text-gray-500">Compte</th>
+                    <th className="px-4 py-2 text-center align-middle font-medium text-gray-500">Intitulé</th>
+                    <th className="px-4 py-2 text-center align-middle font-medium text-gray-500">Débit</th>
+                    <th className="px-4 py-2 text-center align-middle font-medium text-gray-500">Crédit</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700 [&_td]:border [&_td]:border-gray-100 dark:[&_td]:border-gray-700">
                   {e.lines.map((l, i) => (
                     <tr key={i} className={l.debit > 0 ? 'bg-green-50/30' : 'bg-red-50/30'}>
-                      <td className="px-4 py-2 font-mono font-bold text-primary">{l.account_code}</td>
-                      <td className="px-4 py-2 text-gray-600">{l.account_name}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-green-700">
+                      <td className="px-4 py-2 text-center align-middle font-mono font-bold text-primary">{l.account_code}</td>
+                      <td className="px-4 py-2 text-center align-middle text-gray-600">{l.account_name}</td>
+                      <td className="px-4 py-2 text-center align-middle font-semibold text-green-700">
                         {l.debit > 0 ? fmt(l.debit) : ''}
                       </td>
-                      <td className="px-4 py-2 text-right font-semibold text-red-600">
+                      <td className="px-4 py-2 text-center align-middle font-semibold text-red-600">
                         {l.credit > 0 ? fmt(l.credit) : ''}
                       </td>
                     </tr>
                   ))}
                   <tr className="bg-gray-50 dark:bg-gray-700/50 font-bold">
-                    <td colSpan={2} className="px-4 py-2 text-right text-gray-500">Total</td>
-                    <td className="px-4 py-2 text-right text-green-700">
+                    <td colSpan={2} className="px-4 py-2 text-center align-middle text-gray-500">Total</td>
+                    <td className="px-4 py-2 text-center align-middle text-green-700">
                       {fmt(e.lines.reduce((s, l) => s + l.debit, 0))}
                     </td>
-                    <td className="px-4 py-2 text-right text-red-600">
+                    <td className="px-4 py-2 text-center align-middle text-red-600">
                       {fmt(e.lines.reduce((s, l) => s + l.credit, 0))}
                     </td>
                   </tr>

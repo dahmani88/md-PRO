@@ -21,7 +21,7 @@ export function registerProductHandlers(): void {
       params.push(filters.type)
     }
 
-    query += ' ORDER BY p.name ASC LIMIT ? OFFSET ?'
+    query += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?'
     params.push(limit, offset)
 
     const rows = db.prepare(query).all(...params)

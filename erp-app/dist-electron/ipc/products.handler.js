@@ -20,7 +20,7 @@ function registerProductHandlers() {
             query += ' AND p.type = ?';
             params.push(filters.type);
         }
-        query += ' ORDER BY p.name ASC LIMIT ? OFFSET ?';
+        query += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?';
         params.push(limit, offset);
         const rows = db.prepare(query).all(...params);
         let countQ = 'SELECT COUNT(*) as c FROM products p WHERE p.is_deleted = 0';

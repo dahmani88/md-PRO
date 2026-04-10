@@ -92,19 +92,28 @@ export default function ReceptionsList() {
       </div>
 
       <div className="card flex-1 overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 z-10">
+        <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '180px' }} />
+            <col style={{ width: '147px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '147px' }} />
+            <col style={{ width: '90px' }} />
+          </colgroup>
+          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 z-10 [&_th]:border [&_th]:border-gray-200 dark:[&_th]:border-gray-600">
             <tr>
-              <th className="px-3 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Numéro</th>
-              <th className="px-3 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Date</th>
-              <th className="px-3 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Fournisseur</th>
-              <th className="px-3 py-3 text-right font-medium text-gray-600 dark:text-gray-300">Total HT</th>
-              <th className="px-3 py-3 text-right font-medium text-gray-600 dark:text-gray-300">TVA</th>
-              <th className="px-3 py-3 text-right font-medium text-gray-600 dark:text-gray-300">Total TTC</th>
-              <th className="px-3 py-3 text-center font-medium text-gray-600 dark:text-gray-300">Stock</th>
+              <th className="px-3 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Numéro</th>
+              <th className="px-3 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Date</th>
+              <th className="px-3 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Fournisseur</th>
+              <th className="px-3 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Total HT</th>
+              <th className="px-3 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">TVA</th>
+              <th className="px-3 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Total TTC</th>
+              <th className="px-3 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Stock</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700 [&_td]:border [&_td]:border-gray-100 dark:[&_td]:border-gray-700">
             {loading && <SkeletonRows cols={6} />}
             {!loading && filtered.length === 0 && (
               <tr><td colSpan={7} className="text-center py-16">
@@ -115,18 +124,24 @@ export default function ReceptionsList() {
             {filtered.map(doc => {
               const hasPending = (doc as any).pending_stock_count > 0
               return (
-                <tr key={doc.id} onClick={() => setSelectedId(doc.id)}
+                <tr key={doc.id} onMouseDown={e => { (e.currentTarget as any)._mdX = e.clientX; (e.currentTarget as any)._mdY = e.clientY }}
+                  onClick={e => {
+                    const el = e.currentTarget as any
+                    if (Math.abs(e.clientX-(el._mdX??e.clientX))>5||Math.abs(e.clientY-(el._mdY??e.clientY))>5) return
+                    if ((e.target as HTMLElement).closest('button')) return
+                    setSelectedId(doc.id)
+                  }}
                   className={`cursor-pointer transition-colors ${hasPending ? 'bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-100/60' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 text-center align-middle">
                     <span className="font-mono text-xs font-semibold text-primary">{doc.number}</span>
                     {hasPending && <span className="ml-1.5 text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded-full">⚠ Stock</span>}
                   </td>
-                  <td className="px-3 py-3 text-gray-500 text-xs">{new Date(doc.date).toLocaleDateString('fr-FR')}</td>
-                  <td className="px-3 py-3 font-medium max-w-[180px] truncate">{doc.party_name ?? '—'}</td>
-                  <td className="px-3 py-3 text-right text-gray-600">{fmt(doc.total_ht)} MAD</td>
-                  <td className="px-3 py-3 text-right text-gray-500 text-xs">{fmt(doc.total_tva)} MAD</td>
-                  <td className="px-3 py-3 text-right font-semibold">{fmt(doc.total_ttc)} MAD</td>
-                  <td className="px-3 py-3 text-center">
+                  <td className="px-3 py-3 text-center align-middle text-gray-500 text-xs">{new Date(doc.date).toLocaleDateString('fr-FR')}</td>
+                  <td className="px-3 py-3 text-center align-middle font-medium truncate">{doc.party_name ?? '—'}</td>
+                  <td className="px-3 py-3 text-center align-middle text-gray-600">{fmt(doc.total_ht)} MAD</td>
+                  <td className="px-3 py-3 text-center align-middle text-gray-500 text-xs">{fmt(doc.total_tva)} MAD</td>
+                  <td className="px-3 py-3 text-center align-middle font-semibold">{fmt(doc.total_ttc)} MAD</td>
+                  <td className="px-3 py-3 text-center align-middle">
                     <span className={hasPending ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium' : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium'}>
                       {hasPending ? '⏳ En attente' : '✅ Appliqué'}
                     </span>
@@ -136,7 +151,7 @@ export default function ReceptionsList() {
             })}
           </tbody>
           {!loading && filtered.length > 0 && (
-            <tfoot>
+            <tfoot className="sticky bottom-0 z-10 [&_tr]:bg-gray-50 dark:[&_tr]:bg-[#2a2a2a]">
               <tr className="bg-gray-50 dark:bg-gray-700/50 border-t-2 border-gray-200 dark:border-gray-600 font-semibold text-sm">
                 <td colSpan={3} className="px-3 py-3 text-gray-500">Total ({filtered.length})</td>
                 <td className="px-3 py-3 text-right text-gray-700 dark:text-gray-200">{fmt(filtered.reduce((s, d) => s + d.total_ht, 0))} MAD</td>

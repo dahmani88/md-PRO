@@ -22,20 +22,23 @@ export function registerNotificationsHandlers(): void {
       LEFT JOIN suppliers s ON s.id = p.party_id AND p.party_type = 'supplier'
       WHERE p.method IN ('cheque', 'lcn')
         AND p.status = 'pending'
-        AND p.due_date IS NOT NULL
-        AND p.due_date <= ?
-      ORDER BY p.due_date ASC
+        AND (p.due_date IS NULL OR p.due_date <= ?)
+      ORDER BY p.due_date ASC NULLS LAST
     `).all(in7days) as any[]
 
     for (const ch of cheques) {
-      const daysLeft = Math.ceil((new Date(ch.due_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      const dueDate = ch.due_date ? new Date(ch.due_date) : null
+      const daysLeft = dueDate ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0
+      const dueDateStr = dueDate && !isNaN(dueDate.getTime())
+        ? dueDate.toLocaleDateString('fr-FR')
+        : 'Non définie'
       notifications.push({
         id: `cheque-${ch.id}`,
         type: 'cheque',
         severity: daysLeft <= 2 ? 'error' : 'warning',
         title: `${ch.method === 'lcn' ? 'LCN' : 'Chèque'} à encaisser`,
-        message: `${ch.party_name} — ${new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(ch.amount)} MAD — Échéance: ${new Date(ch.due_date).toLocaleDateString('fr-FR')} (${daysLeft}j)`,
-        date: ch.due_date,
+        message: `${ch.party_name} — ${new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(ch.amount)} MAD — Échéance: ${dueDateStr}${dueDate ? ` (${daysLeft}j)` : ''}`,
+        date: ch.due_date ?? today,
         ref_id: ch.id,
       })
     }

@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api'
+import { toast } from '../../components/ui/Toast'
 import Pagination from '../../components/ui/Pagination'
 import Drawer from '../../components/ui/Drawer'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import DocumentDetail from '../../components/DocumentDetail'
 import type { StockMovement } from '../../types'
 
@@ -15,6 +17,7 @@ export default function MovementsList() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'applied'>('all')
   const [search, setSearch] = useState('')
   const [selectedDocId, setSelectedDocId] = useState<number | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<StockMovement | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -48,25 +51,31 @@ export default function MovementsList() {
   async function handleApply(id: number) {
     try {
       await api.applyStockMovement(id)
+      toast('Mouvement appliqué ✅')
       load()
     } catch (e: any) {
-      alert(e.message)
+      toast(e.message, 'error')
     }
   }
 
   async function handleDelete(m: StockMovement) {
-    if (m.document_id) {
-      if (!confirm('Annuler le document lié à ce mouvement ?')) return
-      try {
+    setConfirmDelete(m)
+  }
+
+  async function doDelete(m: StockMovement) {
+    try {
+      if (m.document_id) {
         await api.cancelDocument(m.document_id)
-        load()
-      } catch (e: any) { alert(e.message) }
-    } else {
-      if (!confirm('Supprimer ce mouvement en attente ?')) return
-      try {
+        toast('Document annulé', 'warning')
+      } else {
         await api.deleteStockMovement(m.id)
-        load()
-      } catch (e: any) { alert(e.message) }
+        toast('Mouvement supprimé', 'warning')
+      }
+      load()
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setConfirmDelete(null)
     }
   }
 
@@ -132,19 +141,19 @@ export default function MovementsList() {
             <col style={{ width: '130px' }} />
             <col style={{ width: '120px' }} />
           </colgroup>
-          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 [&_th]:border [&_th]:border-gray-200 dark:[&_th]:border-gray-600">
             <tr className="divide-x divide-gray-200 dark:divide-gray-600">
-              <th className="px-2 py-3 text-center font-medium text-gray-600 whitespace-nowrap">Date</th>
-              <th className="px-3 py-3 text-center font-medium text-gray-600">Produit</th>
-              <th className="px-2 py-3 text-center font-medium text-gray-600 whitespace-nowrap">Mouvement</th>
-              <th className="px-2 py-3 text-center font-medium text-gray-600 whitespace-nowrap">Quantité</th>
-              <th className="px-2 py-3 text-center font-medium text-gray-600 whitespace-nowrap">Coût unitaire</th>
-              <th className="px-2 py-3 text-center font-medium text-gray-600 whitespace-nowrap">CMUP avant → après</th>
-              <th className="px-2 py-3 text-center font-medium text-gray-600 whitespace-nowrap">Source</th>
-              <th className="px-2 py-3 text-center font-medium text-gray-600 whitespace-nowrap">Statut</th>
+              <th className="px-2 py-3 text-center align-middle font-medium text-gray-600 whitespace-nowrap">Date</th>
+              <th className="px-3 py-3 text-center align-middle font-medium text-gray-600">Produit</th>
+              <th className="px-2 py-3 text-center align-middle font-medium text-gray-600 whitespace-nowrap">Mouvement</th>
+              <th className="px-2 py-3 text-center align-middle font-medium text-gray-600 whitespace-nowrap">Quantité</th>
+              <th className="px-2 py-3 text-center align-middle font-medium text-gray-600 whitespace-nowrap">Coût unitaire</th>
+              <th className="px-2 py-3 text-center align-middle font-medium text-gray-600 whitespace-nowrap">CMUP avant → après</th>
+              <th className="px-2 py-3 text-center align-middle font-medium text-gray-600 whitespace-nowrap">Source</th>
+              <th className="px-2 py-3 text-center align-middle font-medium text-gray-600 whitespace-nowrap">Statut</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700 [&_td]:border [&_td]:border-gray-100 dark:[&_td]:border-gray-700">
             {loading && [...Array(5)].map((_, i) => (
               <tr key={i} className="animate-pulse">
                 {[...Array(8)].map((_, j) => (
@@ -164,16 +173,16 @@ export default function MovementsList() {
             {!loading && filtered.map(m => (
               <tr key={m.id} className="group hover:bg-gray-50 dark:hover:bg-gray-700/30 divide-x divide-gray-100 dark:divide-gray-700">
                 {/* Date */}
-                <td className="px-2 py-3 text-center text-gray-500 text-xs whitespace-nowrap">
+                <td className="px-2 py-3 text-center align-middle text-gray-500 text-xs whitespace-nowrap">
                   {new Date(m.date).toLocaleDateString('fr-FR')}
                 </td>
                 {/* Produit */}
-                <td className="px-3 py-3 min-w-0 text-center">
+                <td className="px-3 py-3 min-w-0 text-center align-middle">
                   <div className="font-medium truncate">{m.product_name}</div>
                   <div className="text-xs text-gray-400 font-mono truncate">{m.product_code} · {m.unit}</div>
                 </td>
                 {/* Mouvement */}
-                <td className="px-2 py-3 text-center">
+                <td className="px-2 py-3 text-center align-middle">
                   <span className={`inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full text-xs font-bold w-full
                     ${m.type === 'in'
                       ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
@@ -182,22 +191,22 @@ export default function MovementsList() {
                   </span>
                 </td>
                 {/* Quantité */}
-                <td className="px-2 py-3 text-center">
+                <td className="px-2 py-3 text-center align-middle">
                   <span className={`font-bold ${m.type === 'in' ? 'text-green-600' : 'text-red-500'}`}>
                     {m.type === 'in' ? '+' : '-'}{fmt(m.quantity)}
                   </span>
                 </td>
                 {/* Coût unitaire */}
-                <td className="px-2 py-3 text-center text-gray-600 text-xs whitespace-nowrap">{fmt(m.unit_cost)} MAD</td>
+                <td className="px-2 py-3 text-center align-middle text-gray-600 text-xs whitespace-nowrap">{fmt(m.unit_cost)} MAD</td>
                 {/* CMUP */}
-                <td className="px-2 py-3 text-center text-xs text-gray-500 whitespace-nowrap">
+                <td className="px-2 py-3 text-center align-middle text-xs text-gray-500 whitespace-nowrap">
                   {m.applied
                     ? <span>{fmt(m.cmup_before)} <span className="text-gray-300">→</span> <span className="font-medium text-gray-700 dark:text-gray-300">{fmt(m.cmup_after)}</span></span>
                     : <span className="text-gray-400">{fmt(m.cmup_before)} → ?</span>
                   }
                 </td>
                 {/* Source */}
-                <td className="px-2 py-3 min-w-0 text-center">
+                <td className="px-2 py-3 min-w-0 text-center align-middle">
                   {(() => {
                     const src = getSource(m)
                     return src.clickable
@@ -211,7 +220,7 @@ export default function MovementsList() {
                   {m.notes && <div className="text-xs text-gray-400 truncate mt-0.5">{m.notes}</div>}
                 </td>
                 {/* Statut */}
-                <td className="px-2 py-3 text-center whitespace-nowrap">
+                <td className="px-2 py-3 text-center align-middle whitespace-nowrap">
                   {m.applied
                     ? <span className="badge-green">✅ Appliqué</span>
                     : <div className="relative inline-block">
@@ -258,6 +267,18 @@ export default function MovementsList() {
           <DocumentDetail docId={selectedDocId} onClose={() => setSelectedDocId(null)} onUpdated={load} />
         )}
       </Drawer>
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={confirmDelete?.document_id ? 'Annuler le document lié ?' : 'Supprimer ce mouvement ?'}
+        message={confirmDelete?.document_id
+          ? 'Le document lié à ce mouvement sera annulé. Cette action est irréversible.'
+          : 'Ce mouvement en attente sera supprimé définitivement.'}
+        confirmLabel="Confirmer"
+        danger
+        onConfirm={() => confirmDelete && doDelete(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

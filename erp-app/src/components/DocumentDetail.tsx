@@ -15,15 +15,27 @@ import ImportInvoiceForm from '../pages/achats/ImportInvoiceForm'
 import type { Document } from '../types'
 import ConfirmDialog from './ui/ConfirmDialog'
 
+const DOC_TYPE_LABEL: Record<string, string> = {
+  invoice:          'Facture',
+  quote:            'Devis',
+  bl:               'Bon de Livraison',
+  proforma:         'Proforma',
+  avoir:            'Avoir',
+  purchase_order:   'Bon de Commande',
+  bl_reception:     'Bon de Réception',
+  purchase_invoice: 'Facture Fournisseur',
+  import_invoice:   'Importation',
+}
+
 const STATUS_BADGE: Record<string, string> = {
   draft: 'badge-gray', confirmed: 'badge-blue', partial: 'badge-orange',
   paid: 'badge-green', cancelled: 'badge-red', delivered: 'badge-green',
-  partial: 'badge-orange', received: 'badge-green',
+  received: 'badge-green',
 }
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Brouillon', confirmed: 'Confirmée', partial: 'Partiel',
-  paid: 'Payée', cancelled: 'Annulée', delivered: 'Appliqué',
-  partial: 'Partiel', received: 'Reçu',
+  paid: 'Payée', cancelled: 'Annulée', delivered: 'Livrée',
+  received: 'Reçu',
 }
 
 // ── due date helper ──────────────────────────────────────────────────────────
@@ -259,6 +271,58 @@ function EditPurchaseInvoiceWrapper({ doc, onSaved, onCancel }: {
   )
 }
 
+// ── Document Timeline ────────────────────────────────────────────────────────
+function DocumentTimeline({ docId }: { docId: number }) {
+  const [events, setEvents] = useState<any[]>([])
+
+  useEffect(() => {
+    api.getDocumentTimeline(docId)
+      .then((r: any) => setEvents(Array.isArray(r) ? r : []))
+      .catch(() => setEvents([]))
+  }, [docId])
+
+  if (events.length === 0) return null
+
+  const typeColor: Record<string, string> = {
+    created:   'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
+    confirmed: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
+    payment:   'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
+    delivery:  'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300',
+    avoir:     'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300',
+    cancelled: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
+  }
+
+  return (
+    <div>
+      <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Historique</div>
+      <div className="relative">
+        {/* ligne verticale */}
+        <div className="absolute left-3.5 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" />
+        <div className="space-y-3">
+          {events.map((ev, i) => (
+            <div key={i} className="flex items-start gap-3 relative">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 z-10 ${typeColor[ev.type] ?? typeColor.created}`}>
+                {ev.icon}
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{ev.label}</span>
+                  <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                    {new Date(ev.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                {ev.detail && (
+                  <div className="text-[11px] text-gray-400 mt-0.5">{ev.detail}</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Partial Reception Modal ──────────────────────────────────────────────────
 // PO Receipt Summary
 function POReceiptSummary({ docId }: { docId: number }) {
@@ -290,7 +354,7 @@ function POReceiptSummary({ docId }: { docId: number }) {
         </div>
       </div>
       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-        <div className={`h-2 rounded-full transition-all ${fullyReceived ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${pct}%` }} />
+        <div className={`h-2 rounded-full transition-all ${fullyReceived ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
       <div className="space-y-1.5">
         {summary.map((l: any) => (
@@ -308,6 +372,174 @@ function POReceiptSummary({ docId }: { docId: number }) {
         <div className="text-xs text-amber-600 dark:text-amber-400 pt-1 border-t border-amber-200 dark:border-amber-700">
           {fmt(totalRemaining)} unite(s) encore en attente
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── Invoice Delivery Summary ─────────────────────────────────────────────────
+function InvoiceDeliverySummary({ docId }: { docId: number }) {
+  const [status, setStatus] = useState<any>(null)
+  const fmt = (n: number) => new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(n ?? 0)
+
+  useEffect(() => {
+    api.getBLDeliveryStatus(docId)
+      .then((r: any) => setStatus(r))
+      .catch(() => setStatus({ summary: [], fullyDelivered: false, blCount: 0 }))
+  }, [docId])
+
+  if (!status || status.summary.length === 0 || status.blCount === 0) return null
+  const { summary, fullyDelivered, blCount } = status
+  const totalOrdered   = summary.reduce((s: number, l: any) => s + l.qty_ordered, 0)
+  const totalDelivered = summary.reduce((s: number, l: any) => s + l.qty_delivered, 0)
+  const totalRemaining = summary.reduce((s: number, l: any) => s + l.qty_remaining, 0)
+  const pct = totalOrdered > 0 ? Math.round((totalDelivered / totalOrdered) * 100) : 0
+
+  return (
+    <div className={`border rounded-xl p-4 space-y-3 ${fullyDelivered ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10' : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10'}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Suivi des livraisons</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">{blCount} BL créé(s)</span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${fullyDelivered ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+            {fullyDelivered ? 'Livré' : `${pct}% livré`}
+          </span>
+        </div>
+      </div>
+      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+        <div className={`h-2 rounded-full transition-all ${fullyDelivered ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <div className="space-y-1.5">
+        {summary.map((l: any) => (
+          <div key={l.id} className="flex items-center gap-3 text-xs">
+            <span className="flex-1 truncate text-gray-600 dark:text-gray-300">{l.description ?? `Produit #${l.product_id}`}</span>
+            <span className="text-gray-400">cmd: <span className="font-medium text-gray-600 dark:text-gray-200">{fmt(l.qty_ordered)}</span></span>
+            <span className="text-green-600">livré: <span className="font-medium">{fmt(l.qty_delivered)}</span></span>
+            {l.qty_remaining > 0
+              ? <span className="text-amber-600">restant: <span className="font-medium">{fmt(l.qty_remaining)}</span></span>
+              : <span className="text-green-500">✓</span>}
+          </div>
+        ))}
+      </div>
+      {!fullyDelivered && (
+        <div className="text-xs text-amber-600 dark:text-amber-400 pt-1 border-t border-amber-200 dark:border-amber-700">
+          {fmt(totalRemaining)} unité(s) encore à livrer
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Partial Delivery Modal ───────────────────────────────────────────────────
+function PartialDeliveryModal({ doc, onSaved, onCancel }: {
+  doc: Document
+  onSaved: () => void
+  onCancel: () => void
+}) {
+  const [status, setStatus] = useState<any>(null)
+  const [quantities, setQuantities] = useState<Record<number, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const fmt = (n: number) => new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(n ?? 0)
+
+  useEffect(() => {
+    api.getBLDeliveryStatus(doc.id)
+      .then((r: any) => {
+        setStatus(r)
+        const init: Record<number, number> = {}
+        ;(r.summary ?? []).forEach((l: any) => { init[l.id] = l.qty_remaining })
+        setQuantities(init)
+      })
+      .catch((e: any) => {
+        toast(e?.message ?? 'Erreur chargement', 'error')
+        setStatus({ summary: [], fullyDelivered: false, blCount: 0 })
+      })
+      .finally(() => setLoading(false))
+  }, [doc.id])
+
+  async function handleSubmit() {
+    const lines = status.summary
+      .filter((l: any) => (quantities[l.id] ?? 0) > 0)
+      .map((l: any) => ({ id: l.id, quantity: quantities[l.id] }))
+
+    if (lines.length === 0) {
+      toast('Aucune quantité à livrer', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result = await api.convertDocument({
+        sourceId: doc.id,
+        targetType: 'bl',
+        extra: { lines },
+      }) as any
+      await api.linkDocuments({ parentId: doc.id, childId: result.id, linkType: 'invoice_to_bl' })
+      await api.confirmDocument(result.id)
+      toast('Bon de livraison créé — Stock en attente ⏳')
+      onSaved()
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) return <div className="p-8 text-center text-gray-400 animate-pulse">⏳ Chargement...</div>
+
+  const { summary, blCount } = status
+  const totalRemaining = summary.reduce((s: number, l: any) => s + l.qty_remaining, 0)
+
+  return (
+    <div className="space-y-4">
+      {blCount > 0 && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2.5 text-xs text-blue-700 dark:text-blue-400">
+          🚚 {blCount} bon(s) de livraison déjà créé(s) pour cette facture
+        </div>
+      )}
+      {totalRemaining <= 0 ? (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3 text-sm text-green-700 dark:text-green-400 text-center">
+          ✅ Toutes les quantités ont été livrées
+        </div>
+      ) : (
+        <>
+          <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 text-xs font-medium text-gray-500">
+              <div className="col-span-4">Produit</div>
+              <div className="col-span-2 text-right">Commandé</div>
+              <div className="col-span-2 text-right">Livré</div>
+              <div className="col-span-2 text-right text-amber-600">Restant</div>
+              <div className="col-span-2 text-right text-primary">À livrer</div>
+            </div>
+            {summary.map((l: any) => (
+              <div key={l.id} className="grid grid-cols-12 gap-2 px-3 py-2.5 border-t border-gray-100 dark:border-gray-700 items-center">
+                <div className="col-span-4 text-sm font-medium truncate">{l.description ?? `Produit #${l.product_id}`}</div>
+                <div className="col-span-2 text-right text-xs text-gray-500">{fmt(l.qty_ordered)}</div>
+                <div className="col-span-2 text-right text-xs text-green-600 font-medium">{fmt(l.qty_delivered)}</div>
+                <div className={`col-span-2 text-right text-xs font-semibold ${l.qty_remaining > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                  {fmt(l.qty_remaining)}
+                </div>
+                <div className="col-span-2">
+                  {l.qty_remaining > 0 ? (
+                    <input
+                      type="number" min={0} max={l.qty_remaining} step="0.01"
+                      value={quantities[l.id] ?? l.qty_remaining}
+                      onChange={e => setQuantities(q => ({ ...q, [l.id]: Math.min(Number(e.target.value), l.qty_remaining) }))}
+                      className="input text-xs text-right w-full"
+                    />
+                  ) : (
+                    <span className="text-xs text-gray-400 text-right block">✅ Livré</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+            <button type="button" onClick={onCancel} className="btn-secondary">Annuler</button>
+            <button type="button" disabled={submitting} onClick={handleSubmit} className="btn-primary flex-1 justify-center">
+              {submitting ? '...' : '🚚 Créer le Bon de Livraison'}
+            </button>
+          </div>
+        </>
       )}
     </div>
   )
@@ -449,23 +681,29 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
   const [stockConfirm, setStockConfirm] = useState(false)
   const [editModal, setEditModal] = useState(false)
   const [receptionModal, setReceptionModal] = useState(false)
+  const [deliveryModal, setDeliveryModal] = useState(false)
+  const [converting, setConverting] = useState(false)
 
   const fmt = (n: number) => new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(n)
 
-  async function load() {
+  async function load(currentDocId = docId) {
     setLoading(true)
     try {
-      const result = await api.getDocument(docId) as unknown as Document
+      const result = await api.getDocument(currentDocId) as unknown as Document
+      // تجاهل النتيجة إذا تغير docId أثناء الطلب
+      if (currentDocId !== docId) return
       setDoc(result)
-      // نجلب المبلغ المدفوع الدقيق من payment_allocations
-      const paidData = await api.getPaymentPaidAmount(docId) as any
+      const paidData = await api.getPaymentPaidAmount(currentDocId) as any
+      if (currentDocId !== docId) return
       setTotalPaid(paidData?.total ?? 0)
+    } catch {
+      if (currentDocId === docId) setDoc(null)
     } finally {
-      setLoading(false)
+      if (currentDocId === docId) setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [docId])
+  useEffect(() => { load(docId) }, [docId])
 
   // المستندات التي تولد حركات مخزون
   const STOCK_DOC_TYPES = ['bl', 'bl_reception', 'avoir']
@@ -672,6 +910,11 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
         <POReceiptSummary docId={doc.id} />
       )}
 
+      {/* ملخص التسليم للفاتورة */}
+      {doc.type === 'invoice' && doc.status !== 'draft' && (
+        <InvoiceDeliverySummary docId={doc.id} />
+      )}
+
       {/* Mouvements stock en attente */}
       {doc.pendingMovements && doc.pendingMovements.length > 0 && (
         <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
@@ -702,7 +945,7 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
                 className="w-full flex items-center gap-2 text-xs bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2 hover:bg-primary/5 transition-colors text-left">
                 <span className="text-gray-400">🔗</span>
                 <span className="font-mono text-primary">{link.related_number}</span>
-                <span className="text-gray-400 capitalize">{link.related_type}</span>
+                <span className="text-gray-400">{DOC_TYPE_LABEL[link.related_type] ?? link.related_type}</span>
                 <span className={`ml-auto ${STATUS_BADGE[link.related_status] ?? 'badge-gray'}`}>
                   {STATUS_LABEL[link.related_status] ?? link.related_status}
                 </span>
@@ -726,6 +969,9 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
         </div>
       )}
 
+      {/* Timeline */}
+      <DocumentTimeline docId={doc.id} />
+
       {/* Pièces jointes */}
       <AttachmentsPanel entityType="document" entityId={doc.id} />
 
@@ -739,45 +985,55 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
           <button onClick={handleConfirm} className="btn-primary btn-sm">✅ Confirmer</button>
         )}
         {doc.type === 'quote' && doc.status === 'confirmed' && (
-          <button onClick={async () => {
+          <button disabled={converting} onClick={async () => {
+            if (converting) return
+            setConverting(true)
             try {
               await api.convertDocument({ sourceId: doc.id, targetType: 'invoice', extra: { payment_method: 'cash' } })
               toast('Converti en facture'); load(); onUpdated()
             } catch (e: any) { toast(e.message, 'error') }
-          }} className="btn-secondary btn-sm">📄 → Facture</button>
+            finally { setConverting(false) }
+          }} className="btn-secondary btn-sm disabled:opacity-50">📄 → Facture</button>
         )}
         {doc.type === 'proforma' && doc.status === 'confirmed' && (
-          <button onClick={async () => {
+          <button disabled={converting} onClick={async () => {
+            if (converting) return
+            setConverting(true)
             try {
               await api.convertDocument({ sourceId: doc.id, targetType: 'invoice', extra: { payment_method: 'cash' } })
               toast('Proforma convertie en facture'); load(); onUpdated()
             } catch (e: any) { toast(e.message, 'error') }
-          }} className="btn-secondary btn-sm">🧾 → Facture</button>
+            finally { setConverting(false) }
+          }} className="btn-secondary btn-sm disabled:opacity-50">🧾 → Facture</button>
         )}
         {doc.type === 'purchase_order' && ['confirmed', 'partial', 'received'].includes(doc.status) && (
           <button onClick={() => setReceptionModal(true)} className="btn-secondary btn-sm">📥 → Bon de Réception</button>
         )}
         {doc.type === 'import_invoice' && doc.status === 'confirmed' && (
-          <button onClick={async () => {
+          <button disabled={converting} onClick={async () => {
+            if (converting) return
+            // التحقق من عدم وجود BR مسبق
+            const existingBR = (doc.links ?? []).find((l: any) => l.related_type === 'bl_reception' && l.related_status !== 'cancelled')
+            if (existingBR) {
+              toast('Un bon de réception existe déjà pour cette importation', 'error')
+              return
+            }
+            setConverting(true)
             try {
               const result = await api.convertDocument({ sourceId: doc.id, targetType: 'bl_reception', extra: {} }) as any
               await api.confirmDocument(result.id)
               toast('Bon de réception créé — Stock en attente ⏳'); load(); onUpdated()
             } catch (e: any) { toast(e.message, 'error') }
-          }} className="btn-secondary btn-sm">📥 → Bon de Réception</button>
+            finally { setConverting(false) }
+          }} className="btn-secondary btn-sm disabled:opacity-50">📥 → Bon de Réception</button>
         )}
-        {doc.type === 'invoice' && doc.status === 'confirmed' && (
+        {doc.type === 'invoice' && ['confirmed', 'partial', 'delivered'].includes(doc.status) && (
           <button onClick={() => setAvoirModal(true)} className="btn-secondary btn-sm">↩️ Avoir</button>
         )}
-        {doc.type === 'invoice' && doc.status === 'confirmed' && (
-          <button onClick={async () => {
-            try {
-              await api.convertDocument({ sourceId: doc.id, targetType: 'bl', extra: {} })
-              toast('Bon de livraison créé'); load(); onUpdated()
-            } catch (e: any) { toast(e.message, 'error') }
-          }} className="btn-secondary btn-sm">🚚 → BL</button>
+        {doc.type === 'invoice' && ['confirmed', 'partial', 'paid'].includes(doc.status) && (
+          <button onClick={() => setDeliveryModal(true)} className="btn-secondary btn-sm">🚚 → BL Partiel</button>
         )}
-        {['invoice', 'purchase_invoice', 'import_invoice'].includes(doc.type) && (doc.status === 'confirmed' || doc.status === 'partial') && doc.party_id && (
+        {['invoice', 'purchase_invoice', 'import_invoice'].includes(doc.type) && ['confirmed', 'partial', 'delivered'].includes(doc.status) && doc.party_id && (
           <button onClick={() => setPaymentModal(true)} className="btn-primary btn-sm">
             💰 Paiement
           </button>
@@ -785,7 +1041,7 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
         {/* séparateur */}
         <div className="flex-1" />
         {/* actions secondaires */}
-        {!['cancelled','paid','delivered'].includes(doc.status) && (
+        {!['cancelled','paid'].includes(doc.status) && (
           <button onClick={() => setCancelConfirm(true)} className="btn-secondary btn-sm text-red-500">🚫 Annuler</button>
         )}
         <button onClick={handlePreview} className="btn-secondary btn-sm">🖨️ PDF</button>
@@ -798,7 +1054,7 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
           partyType={doc.party_type as 'client' | 'supplier'}
           documentId={doc.id}
           maxAmount={remainingAmount}
-          onSaved={() => { setPaymentModal(false); load(); onUpdated() }}
+          onSaved={() => { setPaymentModal(false); load() }}
           onCancel={() => setPaymentModal(false)}
         />
       </Modal>
@@ -807,7 +1063,7 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
       <Modal open={avoirModal} onClose={() => setAvoirModal(false)} title="Créer un Avoir" size="lg">
         <AvoirForm
           sourceInvoice={doc as any}
-          onSaved={() => { setAvoirModal(false); load(); onUpdated() }}
+          onSaved={() => { setAvoirModal(false); load() }}
           onCancel={() => setAvoirModal(false)}
         />
       </Modal>
@@ -846,6 +1102,17 @@ export default function DocumentDetail({ docId, onUpdated }: Omit<Props, 'onClos
             doc={doc}
             onSaved={() => { setReceptionModal(false); load(); onUpdated() }}
             onCancel={() => setReceptionModal(false)}
+          />
+        </Modal>
+      )}
+
+      {/* Livraison partielle Modal */}
+      {deliveryModal && doc && (
+        <Modal open onClose={() => setDeliveryModal(false)} title="Créer un Bon de Livraison" size="lg">
+          <PartialDeliveryModal
+            doc={doc}
+            onSaved={() => { setDeliveryModal(false); load(); onUpdated() }}
+            onCancel={() => setDeliveryModal(false)}
           />
         </Modal>
       )}

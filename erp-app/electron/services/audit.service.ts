@@ -68,7 +68,7 @@ export function getAuditLog(db: Database.Database, filters: AuditFilters = {}): 
     FROM audit_log al
     LEFT JOIN users u ON u.id = al.user_id
     ${where}
-    ORDER BY al.created_at DESC
+    ORDER BY al.id DESC
     LIMIT ? OFFSET ?
   `).all(...params, limit, offset) as any[]
 

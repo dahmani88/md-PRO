@@ -120,18 +120,26 @@ export default function PartiesList({ type }: Props) {
       </div>
 
       <div className="card flex-1 overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 z-10">
+        <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '180px' }} />
+            <col style={{ width: '120px' }} />
+            <col style={{ width: '120px' }} />
+            <col style={{ width: '160px' }} />
+            <col style={{ width: '147px' }} />
+            <col style={{ width: '72px' }} />
+          </colgroup>
+          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 z-10 [&_th]:border [&_th]:border-gray-200 dark:[&_th]:border-gray-600">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Nom</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">ICE</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Telephone</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Email</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-300">Solde</th>
-              <th className="px-4 py-3 w-20"></th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Nom</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">ICE</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Telephone</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Email</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300">Solde</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600 dark:text-gray-300"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700 [&_td]:border [&_td]:border-gray-100 dark:[&_td]:border-gray-700">
             {loading && <SkeletonRows cols={6} />}
             {!loading && rows.length === 0 && (
               <tr><td colSpan={6} className="text-center py-16">
@@ -150,23 +158,29 @@ export default function PartiesList({ type }: Props) {
               const bal = (row as any).balance ?? 0
               const isSelected = selectedId === row.id
               return (
-                <tr key={row.id} onClick={() => setSelectedId(row.id)}
+                <tr key={row.id} onMouseDown={e => { (e.currentTarget as any)._mdX = e.clientX; (e.currentTarget as any)._mdY = e.clientY }}
+                  onClick={e => {
+                    const el = e.currentTarget as any
+                    if (Math.abs(e.clientX-(el._mdX??e.clientX))>5||Math.abs(e.clientY-(el._mdY??e.clientY))>5) return
+                    if ((e.target as HTMLElement).closest('button')) return
+                    setSelectedId(row.id)
+                  }}
                   className={'cursor-pointer transition-colors ' + (isSelected
                     ? 'bg-primary/5 border-l-2 border-l-primary'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-700/30')}>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center align-middle">
                     <div className="font-medium text-gray-800 dark:text-gray-100">{row.name}</div>
                     {row.notes && <div className="text-xs text-gray-400 truncate max-w-[180px]">{row.notes}</div>}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{row.ice ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{row.phone ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300 text-xs">{row.email ?? '—'}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-center align-middle text-gray-500 font-mono text-xs">{row.ice ?? '—'}</td>
+                  <td className="px-4 py-3 text-center align-middle text-gray-600 dark:text-gray-300">{row.phone ?? '—'}</td>
+                  <td className="px-4 py-3 text-center align-middle text-gray-600 dark:text-gray-300 text-xs">{row.email ?? '—'}</td>
+                  <td className="px-4 py-3 text-center align-middle">
                     <span className={'font-semibold ' + (bal > 0 ? (type === 'client' ? 'text-orange-500' : 'text-red-500') : 'text-gray-400')}>
                       {fmt(bal)} MAD
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                  <td className="px-4 py-3 text-center align-middle" onClick={e => e.stopPropagation()}>
                     <div className="flex gap-1 justify-end">
                       <button onClick={() => { setEditing(row); setModalOpen(true) }}
                         className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors text-sm">

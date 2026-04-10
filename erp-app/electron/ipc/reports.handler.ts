@@ -29,6 +29,8 @@ export function registerReportHandlers(): void {
         return getPayablesReport(db, filters)
       case 'overdue':
         return getOverdueReport(db, filters)
+      case 'production':
+        return getProductionReport(db, filters)
       default:
         throw new Error(`Type de rapport inconnu: ${type}`)
     }
@@ -98,12 +100,9 @@ function getReceivablesReport(db: any, _filters: any) {
   `).all()
 }
 
-function getChequesReport(db: any, filters: any) {
-  const params: any[] = []
-  let where = "WHERE p.method IN ('cheque', 'lcn') AND p.status = 'pending'"
-  if (filters.start_date) { where += ' AND p.due_date >= ?'; params.push(filters.start_date) }
-  if (filters.end_date)   { where += ' AND p.due_date <= ?'; params.push(filters.end_date) }
-
+function getChequesReport(db: any, _filters: any) {
+  // نُرجع كل الشيكات/LCN المعلقة بدون فلتر تاريخ
+  // الفلترة على 7 أيام تتم في الـ frontend
   return db.prepare(`
     SELECT p.id, p.amount, p.method, p.date, p.due_date,
       p.cheque_number, p.bank, p.status, p.party_type,
@@ -111,9 +110,9 @@ function getChequesReport(db: any, filters: any) {
     FROM payments p
     LEFT JOIN clients   c ON c.id = p.party_id AND p.party_type = 'client'
     LEFT JOIN suppliers s ON s.id = p.party_id AND p.party_type = 'supplier'
-    ${where}
+    WHERE p.method IN ('cheque', 'lcn') AND p.status = 'pending'
     ORDER BY p.due_date ASC
-  `).all(...params)
+  `).all()
 }
 
 function getProfitLossReport(db: any, filters: any) {
@@ -258,5 +257,46 @@ function getOverdueReport(db: any, filters: any) {
     GROUP BY d.id
     HAVING remaining > 0.01
     ORDER BY days_overdue DESC
-  \`).all(...extraParams)
+  `).all(...extraParams)
+}
+
+function getProductionReport(db: any, filters: any) {
+  const params: any[] = []
+  let where = "WHERE po.is_deleted = 0 AND po.status = 'confirmed'"
+  if (filters.start_date) { where += ' AND po.date >= ?'; params.push(filters.start_date) }
+  if (filters.end_date)   { where += ' AND po.date <= ?'; params.push(filters.end_date) }
+
+  const orders = db.prepare(`
+    SELECT po.id, po.date, po.quantity, po.unit_cost, po.total_cost, po.status,
+      p.name as product_name, p.code as product_code, p.unit,
+      bt.name as bom_name
+    FROM production_orders po
+    JOIN products p ON p.id = po.product_id
+    LEFT JOIN bom_templates bt ON bt.id = po.bom_id
+    ${where}
+    ORDER BY po.date DESC
+  `).all(...params) as any[]
+
+  const totalOrders    = orders.length
+  const totalQty       = orders.reduce((s: number, o: any) => s + o.quantity, 0)
+  const totalCost      = orders.reduce((s: number, o: any) => s + o.total_cost, 0)
+  const avgUnitCost    = totalQty > 0 ? totalCost / totalQty : 0
+
+  // par produit
+  const byProduct: Record<string, any> = {}
+  for (const o of orders) {
+    const key = o.product_code
+    if (!byProduct[key]) {
+      byProduct[key] = { product_name: o.product_name, product_code: o.product_code, unit: o.unit, qty: 0, cost: 0, orders: 0 }
+    }
+    byProduct[key].qty    += o.quantity
+    byProduct[key].cost   += o.total_cost
+    byProduct[key].orders += 1
+  }
+
+  return {
+    orders,
+    summary: { totalOrders, totalQty, totalCost, avgUnitCost },
+    byProduct: Object.values(byProduct).sort((a: any, b: any) => b.cost - a.cost),
+  }
 }

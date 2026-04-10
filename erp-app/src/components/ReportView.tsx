@@ -242,7 +242,7 @@ export default function ReportView({ reports, title }: Props) {
             </tbody>
             {/* Ligne totaux */}
             {numericKeys.length > 0 && (
-              <tfoot className="bg-gray-100 dark:bg-gray-700/70 sticky bottom-0">
+              <tfoot className="bg-gray-100 dark:bg-gray-700/70 sticky bottom-0 z-10">
                 <tr>
                   {visibleKeys.map((k, i) => (
                     <td key={k} className="px-3 py-2 text-xs font-bold whitespace-nowrap">

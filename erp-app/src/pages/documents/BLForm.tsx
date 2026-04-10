@@ -6,7 +6,7 @@ import { api } from '../../lib/api'
 import { toast } from '../../components/ui/Toast'
 import FormField from '../../components/ui/FormField'
 import { PartySelector } from '../../components/ui/PartySelector'
-import { LinesTable, LinesTotals } from '../../components/ui/LinesTable'
+import { LinesTable, getDefaultTva, LinesTotals } from '../../components/ui/LinesTable'
 import type { Product, Document } from '../../types'
 
 const schema = z.object({
@@ -39,7 +39,7 @@ export default function BLForm({ onSaved, onCancel }: Props) {
     resolver: zodResolver(schema),
     defaultValues: {
       date: new Date().toISOString().split('T')[0],
-      lines: [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 }],
+      lines: [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() }],
     },
   })
 
@@ -132,7 +132,7 @@ export default function BLForm({ onSaved, onCancel }: Props) {
         register={register}
         setValue={setValue}
         onRemove={remove}
-        onAdd={() => append({ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 })}
+        onAdd={() => append({ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() })}
         showDiscount
         showTva
         productFilter={p => p.type === 'finished' || p.type === 'semi_finished'}

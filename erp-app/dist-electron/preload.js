@@ -36,6 +36,7 @@ const api = {
     // --- Stock ---
     getStockMovements: (filters) => electron_1.ipcRenderer.invoke('stock:getMovements', filters),
     applyStockMovement: (id) => electron_1.ipcRenderer.invoke('stock:applyMovement', id),
+    deleteStockMovement: (id) => electron_1.ipcRenderer.invoke('stock:deleteMovement', id),
     createManualMovement: (data) => electron_1.ipcRenderer.invoke('stock:createManual', data),
     getProductStats: (id) => electron_1.ipcRenderer.invoke('stock:getProductStats', id),
     // --- Documents ---
@@ -47,9 +48,11 @@ const api = {
     cancelDocument: (id) => electron_1.ipcRenderer.invoke('documents:cancel', id),
     convertDocument: (data) => electron_1.ipcRenderer.invoke('documents:convert', data),
     linkDocuments: (data) => electron_1.ipcRenderer.invoke('documents:link', data),
-    getPOReceiptStatus:   (id) => electron_1.ipcRenderer.invoke('documents:getPOReceiptStatus', id),
-    getCancelImpact:      (id) => electron_1.ipcRenderer.invoke('documents:getCancelImpact', id),
-    cancelWithOptions:    (data) => electron_1.ipcRenderer.invoke('documents:cancelWithOptions', data),
+    getPOReceiptStatus: (id) => electron_1.ipcRenderer.invoke('documents:getPOReceiptStatus', id),
+    getBLDeliveryStatus: (id) => electron_1.ipcRenderer.invoke('documents:getBLDeliveryStatus', id),
+    getDocumentTimeline: (id) => electron_1.ipcRenderer.invoke('documents:getTimeline', id),
+    getCancelImpact: (id) => electron_1.ipcRenderer.invoke('documents:getCancelImpact', id),
+    cancelWithOptions: (data) => electron_1.ipcRenderer.invoke('documents:cancelWithOptions', data),
     // --- Payments ---
     getPayments: (filters) => electron_1.ipcRenderer.invoke('payments:getAll', filters),
     createPayment: (data) => electron_1.ipcRenderer.invoke('payments:create', data),
@@ -63,9 +66,13 @@ const api = {
     // --- Production ---
     getProductionOrders: (filters) => electron_1.ipcRenderer.invoke('production:getAll', filters),
     createProduction: (data) => electron_1.ipcRenderer.invoke('production:create', data),
-    confirmProduction: (id) => electron_1.ipcRenderer.invoke('production:confirm', id),
+    confirmProduction: (id, userId) => electron_1.ipcRenderer.invoke('production:confirm', id, userId),
+    cancelProduction: (id, userId) => electron_1.ipcRenderer.invoke('production:cancel', id, userId),
     getBomTemplates: (productId) => electron_1.ipcRenderer.invoke('production:getBoms', productId),
+    getAllBoms: () => electron_1.ipcRenderer.invoke('production:getAllBoms'),
     createBomTemplate: (data) => electron_1.ipcRenderer.invoke('production:createBom', data),
+    updateBomTemplate: (data) => electron_1.ipcRenderer.invoke('production:updateBom', data),
+    deleteBomTemplate: (id) => electron_1.ipcRenderer.invoke('production:deleteBom', id),
     // --- Transformations ---
     getTransformations: (filters) => electron_1.ipcRenderer.invoke('transformations:getAll', filters),
     createTransformation: (data) => electron_1.ipcRenderer.invoke('transformations:create', data),
@@ -113,10 +120,12 @@ const api = {
     attachmentsOpen: (p) => electron_1.ipcRenderer.invoke('attachments:open', p),
     attachmentsDelete: (p) => electron_1.ipcRenderer.invoke('attachments:delete', p),
     // --- Audit ---
+    getUserStats: (id) => electron_1.ipcRenderer.invoke('users:getStats', id),
     auditGetLog: (f) => electron_1.ipcRenderer.invoke('audit:getLog', f),
     auditGetUsers: () => electron_1.ipcRenderer.invoke('audit:getUsers'),
     // --- Accounting extra ---
     createAccount: (d) => electron_1.ipcRenderer.invoke('accounting:createAccount', d),
     getTvaRates: () => electron_1.ipcRenderer.invoke('accounting:getTvaRates'),
+    createTvaRate: (d) => electron_1.ipcRenderer.invoke('accounting:createTvaRate', d),
 };
 electron_1.contextBridge.exposeInMainWorld('api', api);

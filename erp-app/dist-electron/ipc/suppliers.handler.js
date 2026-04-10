@@ -16,7 +16,7 @@ function registerSupplierHandlers() {
             const s = `%${filters.search}%`;
             params.push(s, s, s);
         }
-        query += ' ORDER BY name ASC LIMIT ? OFFSET ?';
+        query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
         params.push(limit, offset);
         const rows = db.prepare(query).all(...params);
         const countQuery = filters?.search
@@ -26,9 +26,19 @@ function registerSupplierHandlers() {
         const total = db.prepare(countQuery).get(...countParams).c;
         // إضافة balance لكل مورد
         const rowsWithBalance = rows.map(supplier => {
-            const invRow = db.prepare(`SELECT COALESCE(SUM(total_ttc),0) as t FROM documents WHERE party_id=? AND party_type='supplier' AND type IN ('purchase_invoice','import_invoice') AND is_deleted=0 AND status IN ('confirmed','partial','paid','delivered')`).get(supplier.id);
-          const payRow = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE party_id=? AND party_type='supplier' AND NOT (method IN ('cheque','lcn') AND status='pending') AND status!='bounced'`).get(supplier.id);
-          const balance = (invRow.t ?? 0) - (payRow.t ?? 0);
+            const invRow = db.prepare(`
+        SELECT COALESCE(SUM(total_ttc), 0) as t FROM documents
+        WHERE party_id=? AND party_type='supplier'
+          AND type IN ('purchase_invoice','import_invoice')
+          AND is_deleted=0 AND status IN ('confirmed','partial','paid','delivered')
+      `).get(supplier.id);
+            const payRow = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) as t FROM payments
+        WHERE party_id=? AND party_type='supplier'
+          AND NOT (method IN ('cheque','lcn') AND status='pending')
+          AND status != 'bounced'
+      `).get(supplier.id);
+            const balance = (invRow.t ?? 0) - (payRow.t ?? 0);
             return { ...supplier, balance };
         });
         return { rows: rowsWithBalance, total, page, limit };
@@ -39,9 +49,19 @@ function registerSupplierHandlers() {
         if (!supplier)
             throw new Error('Fournisseur introuvable');
         // Solde: somme des TTC non payées (fac confirmées uniquement)
-        const invRow2 = db.prepare(`SELECT COALESCE(SUM(total_ttc),0) as t FROM documents WHERE party_id=? AND party_type='supplier' AND type IN ('purchase_invoice','import_invoice') AND is_deleted=0 AND status IN ('confirmed','partial','paid','delivered')`).get(id);
-      const payRow2 = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE party_id=? AND party_type='supplier' AND NOT (method IN ('cheque','lcn') AND status='pending') AND status!='bounced'`).get(id);
-      const balance = (invRow2.t ?? 0) - (payRow2.t ?? 0);
+        const invRow2 = db.prepare(`
+      SELECT COALESCE(SUM(total_ttc), 0) as t FROM documents
+      WHERE party_id=? AND party_type='supplier'
+        AND type IN ('purchase_invoice','import_invoice')
+        AND is_deleted=0 AND status IN ('confirmed','partial','paid','delivered')
+    `).get(id);
+        const payRow2 = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) as t FROM payments
+      WHERE party_id=? AND party_type='supplier'
+        AND NOT (method IN ('cheque','lcn') AND status='pending')
+        AND status != 'bounced'
+    `).get(id);
+        const balance = (invRow2.t ?? 0) - (payRow2.t ?? 0);
         return { ...supplier, balance };
     });
     (0, index_1.handle)('suppliers:create', (data) => {

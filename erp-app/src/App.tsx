@@ -18,6 +18,12 @@ export default function App() {
   const { isAuthenticated } = useAuthStore()
 
   useEffect(() => {
+    if (!isAuthenticated && state === 'app') {
+      setState('login')
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
     // تطبيق الثيم
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])

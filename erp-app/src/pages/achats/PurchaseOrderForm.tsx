@@ -6,7 +6,7 @@ import { api } from '../../lib/api'
 import { toast } from '../../components/ui/Toast'
 import FormField from '../../components/ui/FormField'
 import { PartySelector } from '../../components/ui/PartySelector'
-import { LinesTable, LinesTotals } from '../../components/ui/LinesTable'
+import { LinesTable, getDefaultTva, LinesTotals } from '../../components/ui/LinesTable'
 import type { Product } from '../../types'
 
 const schema = z.object({
@@ -42,7 +42,7 @@ export default function PurchaseOrderForm({ onSaved, onCancel, editDocId, defaul
     resolver: zodResolver(schema),
     defaultValues: {
       date: new Date().toISOString().split('T')[0],
-      lines: [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 }],
+      lines: [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() }],
     },
   })
 
@@ -63,7 +63,7 @@ export default function PurchaseOrderForm({ onSaved, onCancel, editDocId, defaul
       notes:                  defaultValues.notes ?? '',
       lines:                  defaultValues.lines?.length
         ? defaultValues.lines as FormData['lines']
-        : [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 }],
+        : [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() }],
     })
   }, [defaultValues])
 
@@ -117,7 +117,7 @@ export default function PurchaseOrderForm({ onSaved, onCancel, editDocId, defaul
         register={register}
         setValue={setValue}
         onRemove={remove}
-        onAdd={() => append({ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 })}
+        onAdd={() => append({ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() })}
         showDiscount
         showTva
         priceLabel="Prix HT unitaire"

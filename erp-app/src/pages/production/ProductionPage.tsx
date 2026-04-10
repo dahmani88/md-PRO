@@ -1,14 +1,18 @@
 import { useState } from 'react'
 import ProductionList from './ProductionList'
 import TransformationList from './TransformationList'
+import BomList from './BomList'
 
 const TABS = [
-  { id: 'orders',    label: 'Ordres de Production' },
-  { id: 'transform', label: 'Transformation' },
+  { id: 'orders',    label: '🏭 Ordres de Production' },
+  { id: 'bom',       label: '📋 Nomenclatures (BOM)' },
+  { id: 'transform', label: '🔄 Transformation' },
 ] as const
 
+type TabId = typeof TABS[number]['id']
+
 export default function ProductionPage() {
-  const [tab, setTab] = useState<'orders' | 'transform'>('orders')
+  const [tab, setTab] = useState<TabId>('orders')
   return (
     <div className="h-full flex flex-col">
       <div className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4">
@@ -18,7 +22,7 @@ export default function ProductionPage() {
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all
                 ${tab === t.id
                   ? 'bg-white dark:bg-gray-700 text-primary shadow-sm border border-gray-200 dark:border-gray-600'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'}`}>
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-white/60 dark:hover:bg-gray-700/50'}`}>
               {t.label}
             </button>
           ))}
@@ -26,6 +30,7 @@ export default function ProductionPage() {
       </div>
       <div className="flex-1 overflow-hidden p-4">
         {tab === 'orders'    && <ProductionList />}
+        {tab === 'bom'       && <BomList />}
         {tab === 'transform' && <TransformationList />}
       </div>
     </div>

@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api'
 import { toast } from '../../components/ui/Toast'
 import Drawer from '../../components/ui/Drawer'
+import Modal from '../../components/ui/Modal'
+import PaymentForm from '../../components/forms/PaymentForm'
+import { PartySelector } from '../../components/ui/PartySelector'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(n ?? 0)
@@ -31,7 +34,6 @@ function PaymentDetail({ payment, onClose, onClear, onBounce }: {
   const isCheque = payment.method === 'cheque' || payment.method === 'lcn'
   return (
     <div className="p-6 space-y-5">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <div className="text-lg font-bold text-primary">
@@ -46,7 +48,6 @@ function PaymentDetail({ payment, onClose, onClear, onBounce }: {
         </span>
       </div>
 
-      {/* Partie */}
       <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-4 py-3">
         <div className="text-xs text-gray-400 mb-1">
           {payment.party_type === 'client' ? 'Client' : 'Fournisseur'}
@@ -54,21 +55,18 @@ function PaymentDetail({ payment, onClose, onClear, onBounce }: {
         <div className="font-semibold">{payment.party_name ?? '—'}</div>
       </div>
 
-      {/* Montant */}
       <div className="bg-primary/5 rounded-lg px-4 py-4 text-center">
         <div className="text-xs text-gray-400 mb-1">Montant</div>
         <div className="text-2xl font-bold text-primary">{fmt(payment.amount)} MAD</div>
       </div>
 
-      {/* Détails */}
       <div className="space-y-2 text-sm">
-        {payment.document_number && (
+        {payment.document_number ? (
           <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
             <span className="text-gray-500">Facture</span>
             <span className="font-mono font-semibold text-primary">{payment.document_number}</span>
           </div>
-        )}
-        {!payment.document_number && (
+        ) : (
           <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
             <span className="text-gray-500">Imputation</span>
             <span className="text-gray-400 italic">Avance générale</span>
@@ -76,9 +74,7 @@ function PaymentDetail({ payment, onClose, onClear, onBounce }: {
         )}
         {isCheque && payment.cheque_number && (
           <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
-            <span className="text-gray-500">
-              {payment.method === 'lcn' ? 'N° LCN' : 'N° Chèque'}
-            </span>
+            <span className="text-gray-500">{payment.method === 'lcn' ? 'N° LCN' : 'N° Chèque'}</span>
             <span className="font-mono font-semibold">{payment.cheque_number}</span>
           </div>
         )}
@@ -103,7 +99,6 @@ function PaymentDetail({ payment, onClose, onClear, onBounce }: {
         )}
       </div>
 
-      {/* Actions pour chèques en attente */}
       {isCheque && payment.status === 'pending' && (
         <div className="flex gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
           <button
@@ -122,16 +117,65 @@ function PaymentDetail({ payment, onClose, onClear, onBounce }: {
   )
 }
 
+// ── New Payment Modal ────────────────────────────────────────────────────────
+function NewPaymentModal({ onSaved, onClose }: { onSaved: () => void; onClose: () => void }) {
+  const [partyType, setPartyType] = useState<'client' | 'supplier'>('client')
+  const [partyId, setPartyId]     = useState<number | null>(null)
+  const [partyName, setPartyName] = useState('')
+
+  if (!partyId) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="flex gap-2">
+          {(['client', 'supplier'] as const).map(t => (
+            <button key={t} onClick={() => { setPartyType(t); setPartyId(null) }}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-all
+                ${partyType === t ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:border-primary/50'}`}>
+              {t === 'client' ? '👤 Client' : '🏭 Fournisseur'}
+            </button>
+          ))}
+        </div>
+        <PartySelector
+          type={partyType}
+          value={partyId ?? 0}
+          onChange={(id, party) => { setPartyId(id); setPartyName((party as any).name ?? '') }}
+          onClear={() => { setPartyId(null); setPartyName('') }}
+        />
+        <div className="flex gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+          <button onClick={onClose} className="btn-secondary flex-1 justify-center">Annuler</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6">
+      <div className="mb-4 flex items-center gap-2 text-sm text-gray-500">
+        <button onClick={() => setPartyId(null)} className="hover:text-primary">← Changer</button>
+        <span>·</span>
+        <span className="font-semibold text-gray-700 dark:text-gray-200">{partyName}</span>
+      </div>
+      <PaymentForm
+        partyId={partyId}
+        partyType={partyType}
+        onSaved={() => { onSaved(); onClose() }}
+        onCancel={onClose}
+      />
+    </div>
+  )
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
-export default function PaymentHistoryPage() {
-  const [payments, setPayments]     = useState<any[]>([])
-  const [loading, setLoading]       = useState(false)
-  const [partyType, setPartyType]   = useState<'all' | 'client' | 'supplier'>('client')
-  const [method, setMethod]         = useState('all')
-  const [dateFrom, setDateFrom]     = useState('')
-  const [dateTo, setDateTo]         = useState('')
-  const [search, setSearch]         = useState('')
-  const [selected, setSelected]     = useState<any | null>(null)
+export default function PaiementsPage() {
+  const [payments, setPayments]   = useState<any[]>([])
+  const [loading, setLoading]     = useState(false)
+  const [partyType, setPartyType] = useState<'all' | 'client' | 'supplier'>('all')
+  const [method, setMethod]       = useState('all')
+  const [dateFrom, setDateFrom]   = useState('')
+  const [dateTo, setDateTo]       = useState('')
+  const [search, setSearch]       = useState('')
+  const [selected, setSelected]   = useState<any | null>(null)
+  const [showNew, setShowNew]     = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -148,6 +192,12 @@ export default function PaymentHistoryPage() {
   }, [partyType])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('app:refresh', h)
+    return () => window.removeEventListener('app:refresh', h)
+  }, [load])
 
   async function handleClear(id: number) {
     try {
@@ -184,9 +234,23 @@ export default function PaymentHistoryPage() {
   const byCash   = filtered.filter(p => p.method === 'cash').reduce((s, p) => s + p.amount, 0)
   const byBank   = filtered.filter(p => p.method === 'bank').reduce((s, p) => s + p.amount, 0)
   const byCheque = filtered.filter(p => p.method === 'cheque' || p.method === 'lcn').reduce((s, p) => s + p.amount, 0)
+  const pending  = filtered.filter(p => p.status === 'pending').length
 
   return (
-    <div className="h-full flex flex-col gap-3">
+    <div className="h-full flex flex-col gap-3 p-4">
+
+      {/* Header */}
+      <div className="flex items-center justify-between shrink-0">
+        <div>
+          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">💳 Paiements</h1>
+          {pending > 0 && (
+            <p className="text-xs text-amber-600 mt-0.5">{pending} chèque{pending > 1 ? 's' : ''} en attente d'encaissement</p>
+          )}
+        </div>
+        <button onClick={() => setShowNew(true)} className="btn-primary gap-2">
+          + Nouveau paiement
+        </button>
+      </div>
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
@@ -194,7 +258,7 @@ export default function PaymentHistoryPage() {
           { label: 'Total encaissé', value: fmt(totalAmount) + ' MAD', sub: `${filtered.length} paiement(s)`, color: 'text-primary',    bg: 'bg-primary/5' },
           { label: '💵 Espèces',     value: fmt(byCash)    + ' MAD',   sub: '',                               color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/10' },
           { label: '🏦 Virement',    value: fmt(byBank)    + ' MAD',   sub: '',                               color: 'text-blue-600',  bg: 'bg-blue-50 dark:bg-blue-900/10' },
-          { label: '📝 Chèques/LCN', value: fmt(byCheque)  + ' MAD',   sub: '',                               color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/10' },
+          { label: '📝 Chèques/LCN', value: fmt(byCheque)  + ' MAD',   sub: pending > 0 ? `${pending} en attente` : '', color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/10' },
         ].map(c => (
           <div key={c.label} className={`card p-4 ${c.bg}`}>
             <div className="text-xs text-gray-500 mb-1">{c.label}</div>
@@ -207,7 +271,7 @@ export default function PaymentHistoryPage() {
       {/* Filtres */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
         <input value={search} onChange={e => setSearch(e.target.value)}
-          className="input max-w-xs text-sm" placeholder="Rechercher client, facture..." />
+          className="input max-w-xs text-sm" placeholder="Rechercher client, facture, chèque..." />
         <select value={partyType} onChange={e => setPartyType(e.target.value as any)} className="input w-36 text-sm">
           <option value="all">Tous</option>
           <option value="client">Clients</option>
@@ -230,7 +294,7 @@ export default function PaymentHistoryPage() {
 
       {/* Table */}
       <div className="card flex-1 overflow-auto">
-        <table className="w-full text-sm table-fixed">
+        <table className="w-full text-sm table-fixed border-collapse" style={{ tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '96px' }} />
             <col style={{ width: '22%' }} />
@@ -241,19 +305,19 @@ export default function PaymentHistoryPage() {
             <col style={{ width: '100px' }} />
             <col style={{ width: '72px' }} />
           </colgroup>
-          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 z-10">
+          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 z-10 [&_th]:border [&_th]:border-gray-200 dark:[&_th]:border-gray-600">
             <tr>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Client / Fournisseur</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Mode</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Référence</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Échéance</th>
-              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Montant</th>
-              <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Statut</th>
-              <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"></th>
+              <th className="px-3 py-2.5 text-center align-middle text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date</th>
+              <th className="px-3 py-2.5 text-center align-middle text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Client / Fournisseur</th>
+              <th className="px-3 py-2.5 text-center align-middle text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Mode</th>
+              <th className="px-3 py-2.5 text-center align-middle text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Référence</th>
+              <th className="px-3 py-2.5 text-center align-middle text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Échéance</th>
+              <th className="px-3 py-2.5 text-center align-middle text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Montant</th>
+              <th className="px-3 py-2.5 text-center align-middle text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Statut</th>
+              <th className="px-3 py-2.5 text-center align-middle text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700 [&_td]:border [&_td]:border-gray-100 dark:[&_td]:border-gray-700">
             {loading && [...Array(5)].map((_, i) => (
               <tr key={i} className="animate-pulse">
                 {[...Array(8)].map((_, j) => (
@@ -268,43 +332,45 @@ export default function PaymentHistoryPage() {
                 <td colSpan={8} className="text-center py-16">
                   <div className="text-4xl mb-3">💳</div>
                   <div className="text-gray-500 font-medium">Aucun paiement</div>
-                  <div className="text-gray-400 text-xs mt-1">Ajustez les filtres</div>
+                  <div className="text-gray-400 text-xs mt-1">Ajustez les filtres ou créez un nouveau paiement</div>
                 </td>
               </tr>
             )}
             {!loading && filtered.map((p, i) => (
               <tr key={p.id ?? i}
-                onClick={() => setSelected(p)}
+                onMouseDown={e => { (e.currentTarget as any)._mdX = e.clientX; (e.currentTarget as any)._mdY = e.clientY }}
+                  onClick={e => {
+                    const el = e.currentTarget as any
+                    if (Math.abs(e.clientX-(el._mdX??e.clientX))>5||Math.abs(e.clientY-(el._mdY??e.clientY))>5) return
+                    if ((e.target as HTMLElement).closest('button')) return
+                    setSelected(p)
+                  }}
                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                <td className="px-3 py-3 text-xs text-gray-500 whitespace-nowrap">
+                <td className="px-3 py-3 text-center align-middle text-xs text-gray-500 whitespace-nowrap">
                   {new Date(p.date).toLocaleDateString('fr-FR')}
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-3 py-3 text-center align-middle">
                   <div className="font-medium text-sm truncate">{p.party_name ?? '—'}</div>
-                  <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                    <span>{p.party_type === 'client' ? 'Client' : 'Fournisseur'}</span>
-                    {p.document_number && (
-                      <><span className="text-gray-300">·</span>
-                      <span className="font-mono text-primary">{p.document_number}</span></>
-                    )}
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {p.party_type === 'client' ? 'Client' : 'Fournisseur'}
                   </div>
                 </td>
-                <td className="px-3 py-3 text-xs">{METHOD_LABELS[p.method] ?? p.method}</td>
-                <td className="px-3 py-3 text-xs font-mono text-gray-600 dark:text-gray-300 truncate">
+                <td className="px-3 py-3 text-center align-middle text-xs">{METHOD_LABELS[p.method] ?? p.method}</td>
+                <td className="px-3 py-3 text-center align-middle text-xs font-mono text-gray-600 dark:text-gray-300 truncate">
                   {p.cheque_number ?? (p.bank ?? '—')}
                 </td>
-                <td className="px-3 py-3 text-xs text-gray-500 whitespace-nowrap">
+                <td className="px-3 py-3 text-center align-middle text-xs text-gray-500 whitespace-nowrap">
                   {p.due_date ? new Date(p.due_date).toLocaleDateString('fr-FR') : '—'}
                 </td>
-                <td className="px-3 py-3 text-right font-semibold text-primary whitespace-nowrap">
+                <td className="px-3 py-3 text-center align-middle font-semibold text-primary whitespace-nowrap">
                   {fmt(p.amount)} MAD
                 </td>
-                <td className="px-3 py-3 text-center">
+                <td className="px-3 py-3 text-center align-middle">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CLS[p.status] ?? STATUS_CLS.pending}`}>
                     {STATUS_LABELS[p.status] ?? p.status}
                   </span>
                 </td>
-                <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                <td className="px-3 py-3 text-center align-middle" onClick={e => e.stopPropagation()}>
                   {(p.method === 'cheque' || p.method === 'lcn') && p.status === 'pending' && (
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => handleClear(p.id)} title="Encaisser"
@@ -322,7 +388,7 @@ export default function PaymentHistoryPage() {
             ))}
           </tbody>
           {!loading && filtered.length > 0 && (
-            <tfoot>
+            <tfoot className="sticky bottom-0 z-10 [&_tr]:bg-gray-50 dark:[&_tr]:bg-[#2a2a2a]">
               <tr className="bg-gray-50 dark:bg-gray-700/50 border-t-2 border-gray-200 dark:border-gray-600">
                 <td colSpan={5} className="px-3 py-3 text-sm font-semibold text-gray-500">
                   Total ({filtered.length} paiement{filtered.length > 1 ? 's' : ''})
@@ -348,6 +414,11 @@ export default function PaymentHistoryPage() {
           />
         )}
       </Drawer>
+
+      {/* New Payment Modal */}
+      <Modal open={showNew} onClose={() => setShowNew(false)} title="Nouveau paiement" size="md">
+        <NewPaymentModal onSaved={load} onClose={() => setShowNew(false)} />
+      </Modal>
     </div>
   )
 }

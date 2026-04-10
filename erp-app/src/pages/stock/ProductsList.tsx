@@ -135,21 +135,32 @@ export default function ProductsList() {
 
       {/* Table */}
       <div className="card flex-1 overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+        <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '180px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '70px' }} />
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '147px' }} />
+            <col style={{ width: '68px' }} />
+            <col style={{ width: '72px' }} />
+          </colgroup>
+          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 [&_th]:border [&_th]:border-gray-200 dark:[&_th]:border-gray-600">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Code</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Désignation</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-600">Type</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Unité</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">Stock</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">CMUP</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">Valeur</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-600">État</th>
-              <th className="px-4 py-3 w-24"></th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Code</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Désignation</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Type</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Unité</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Stock</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">CMUP</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Valeur</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">État</th>
+              <th className="px-4 py-3 text-center align-middle font-medium text-gray-600"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700 [&_td]:border [&_td]:border-gray-100 dark:[&_td]:border-gray-700">
             {loading && <SkeletonRows cols={9} />}
             {!loading && filteredRows.length === 0 && (
               <tr><td colSpan={9} className="text-center py-16">
@@ -164,26 +175,32 @@ export default function ProductsList() {
               const typeBadge = TYPE_BADGE[p.type] ?? { label: p.type, cls: 'badge-gray' }
               return (
                 <tr key={p.id}
-                  onClick={() => setSelectedId(p.id)}
+                  onMouseDown={e => { (e.currentTarget as any)._mdX = e.clientX; (e.currentTarget as any)._mdY = e.clientY }}
+                  onClick={e => {
+                    const el = e.currentTarget as any
+                    if (Math.abs(e.clientX-(el._mdX??e.clientX))>5||Math.abs(e.clientY-(el._mdY??e.clientY))>5) return
+                    if ((e.target as HTMLElement).closest('button')) return
+                    setSelectedId(p.id)
+                  }}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer">
-                  <td className="px-4 py-3 font-mono text-xs font-bold text-primary">{p.code}</td>
-                  <td className="px-4 py-3 font-medium">{p.name}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3 text-center align-middle font-mono text-xs font-bold text-primary">{p.code}</td>
+                  <td className="px-4 py-3 text-center align-middle font-medium">{p.name}</td>
+                  <td className="px-4 py-3 text-center align-middle">
                     <span className={typeBadge.cls}>{typeBadge.label}</span>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{p.unit}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${isLow ? 'text-red-500' : ''}`}>
+                  <td className="px-4 py-3 text-center align-middle text-gray-500">{p.unit}</td>
+                  <td className={`px-4 py-3 text-center align-middle font-semibold ${isLow ? 'text-red-500' : ''}`}>
                     {fmt(p.stock_quantity)}
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-600">{fmt(p.cmup_price)}</td>
-                  <td className="px-4 py-3 text-right font-medium">{fmt(p.stock_quantity * p.cmup_price)} MAD</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3 text-center align-middle text-gray-600">{fmt(p.cmup_price)}</td>
+                  <td className="px-4 py-3 text-center align-middle font-medium">{fmt(p.stock_quantity * p.cmup_price)} MAD</td>
+                  <td className="px-4 py-3 text-center align-middle">
                     <span className={isLow ? 'badge-red' : 'badge-green'}>
                       {isLow ? '⚠ Bas' : '✓ OK'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex gap-1 justify-end" onClick={e => e.stopPropagation()}>
+                  <td className="px-4 py-3 text-center align-middle">
+                    <div className="flex gap-1 justify-center" onClick={e => e.stopPropagation()}>
                       <button onClick={() => { setEditing(p); setModalOpen(true) }}
                         className="btn-secondary btn-sm text-xs">✏️</button>
                     </div>

@@ -87,37 +87,45 @@ export default function GrandLivreView() {
       )}
       {lines.length > 0 && (
         <div className="card flex-1 overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+          <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '110px' }} />
+              <col style={{ width: '130px' }} />
+              <col />
+              <col style={{ width: '130px' }} />
+              <col style={{ width: '130px' }} />
+              <col style={{ width: '130px' }} />
+            </colgroup>
+            <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0 [&_th]:border [&_th]:border-gray-200 dark:[&_th]:border-gray-600">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Date</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Référence</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Description</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-600">Débit</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-600">Crédit</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-600">Solde</th>
+                <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Date</th>
+                <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Référence</th>
+                <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Description</th>
+                <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Débit</th>
+                <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Crédit</th>
+                <th className="px-4 py-3 text-center align-middle font-medium text-gray-600">Solde</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 [&_td]:border [&_td]:border-gray-100 dark:[&_td]:border-gray-700">
               {lines.map((l, i) => (
                 <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                  <td className="px-4 py-2 text-gray-500 text-xs">{new Date(l.date).toLocaleDateString('fr-FR')}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-primary">{l.reference}</td>
-                  <td className="px-4 py-2 text-gray-600">{l.description}</td>
-                  <td className="px-4 py-2 text-right text-green-700 font-medium">{l.debit > 0 ? fmt(l.debit) : ''}</td>
-                  <td className="px-4 py-2 text-right text-red-600 font-medium">{l.credit > 0 ? fmt(l.credit) : ''}</td>
-                  <td className={`px-4 py-2 text-right font-bold ${l.balance >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  <td className="px-4 py-2 text-center align-middle text-gray-500 text-xs">{new Date(l.date).toLocaleDateString('fr-FR')}</td>
+                  <td className="px-4 py-2 text-center align-middle font-mono text-xs text-primary">{l.reference}</td>
+                  <td className="px-4 py-2 text-center align-middle text-gray-600">{l.description}</td>
+                  <td className="px-4 py-2 text-center align-middle text-green-700 font-medium">{l.debit > 0 ? fmt(l.debit) : ''}</td>
+                  <td className="px-4 py-2 text-center align-middle text-red-600 font-medium">{l.credit > 0 ? fmt(l.credit) : ''}</td>
+                  <td className={`px-4 py-2 text-center align-middle font-bold ${l.balance >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                     {fmt(Math.abs(l.balance))} {l.balance >= 0 ? 'D' : 'C'}
                   </td>
                 </tr>
               ))}
             </tbody>
-            <tfoot className="bg-gray-50 dark:bg-gray-700/50 font-bold border-t-2 border-gray-200">
+            <tfoot className="bg-gray-50 dark:bg-gray-700/50 font-bold border-t-2 border-gray-200 sticky bottom-0 z-10">
               <tr>
-                <td colSpan={3} className="px-4 py-3 text-right">Totaux</td>
-                <td className="px-4 py-3 text-right text-green-700">{fmt(totalDebit)}</td>
-                <td className="px-4 py-3 text-right text-red-600">{fmt(totalCredit)}</td>
-                <td className={`px-4 py-3 text-right ${totalDebit - totalCredit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                <td colSpan={3} className="px-4 py-3 text-center align-middle">Totaux</td>
+                <td className="px-4 py-3 text-center align-middle text-green-700">{fmt(totalDebit)}</td>
+                <td className="px-4 py-3 text-center align-middle text-red-600">{fmt(totalCredit)}</td>
+                <td className={`px-4 py-3 text-center align-middle ${totalDebit - totalCredit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                   {fmt(Math.abs(totalDebit - totalCredit))} {totalDebit - totalCredit >= 0 ? 'D' : 'C'}
                 </td>
               </tr>

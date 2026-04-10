@@ -12,7 +12,8 @@
     "baseUrl": ".",
     "paths": {
       "@electron/*": ["electron/*"]
-    }
+    },
+    "types": ["jest", "node"]
   },
   "include": ["electron"]
 }

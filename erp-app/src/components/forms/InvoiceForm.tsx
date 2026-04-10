@@ -6,7 +6,7 @@ import { api } from '../../lib/api'
 import { toast } from '../ui/Toast'
 import FormField from '../ui/FormField'
 import { PartySelector } from '../ui/PartySelector'
-import { LinesTable, LinesTotals } from '../ui/LinesTable'
+import { LinesTable, getDefaultTva, LinesTotals } from '../ui/LinesTable'
 import type { Product } from '../../types'
 
 const schema = z.object({
@@ -62,7 +62,7 @@ export default function InvoiceForm({
       currency:       'MAD',
       exchange_rate:  1,
       payment_method: 'cash',
-      lines: [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 }],
+      lines: [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() }],
     },
   })
 
@@ -88,7 +88,7 @@ export default function InvoiceForm({
       notes:          defaultValues.notes          ?? '',
       lines:          defaultValues.lines?.length
         ? defaultValues.lines as FormData['lines']
-        : [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 }],
+        : [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() }],
     })
   }, [defaultValues])
 
@@ -211,7 +211,7 @@ export default function InvoiceForm({
         register={register}
         setValue={setValue}
         onRemove={remove}
-        onAdd={() => append({ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 })}
+        onAdd={() => append({ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() })}
         showDiscount
         showTva
       />

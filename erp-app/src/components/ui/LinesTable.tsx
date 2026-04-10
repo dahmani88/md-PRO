@@ -29,7 +29,21 @@ interface Props {
   readonlyPrice?: boolean
 }
 
-const TVA_RATES = [0, 7, 10, 14, 20]
+const DEFAULT_TVA_KEY = 'erp_last_tva_rate'
+
+function getDefaultTva(): number {
+  try {
+    const saved = localStorage.getItem(DEFAULT_TVA_KEY)
+    if (saved !== null) return Number(saved)
+  } catch {}
+  return 20
+}
+
+function saveDefaultTva(rate: number) {
+  try { localStorage.setItem(DEFAULT_TVA_KEY, String(rate)) } catch {}
+}
+
+export { getDefaultTva }
 
 function calcLine(l: Partial<LineData>) {
   const qty   = Number(l.quantity)   || 0
@@ -219,9 +233,20 @@ export function LinesTable({
               {/* TVA */}
               {showTva && (
                 <div>
-                  <select {...register(`lines.${i}.tva_rate`)} className="input text-xs">
-                    {TVA_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
-                  </select>
+                  <input
+                    {...register(`lines.${i}.tva_rate`)}
+                    className="input text-xs text-right"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="20"
+                    onChange={e => {
+                      register(`lines.${i}.tva_rate`).onChange(e)
+                      const val = Number(e.target.value)
+                      if (!isNaN(val) && val >= 0 && val <= 100) saveDefaultTva(val)
+                    }}
+                  />
                 </div>
               )}
 

@@ -52,7 +52,25 @@ function handle(channel, fn) {
         }
         catch (err) {
             console.error(`[IPC Error] ${channel}:`, err.message);
-            return { success: false, error: err.message ?? 'Erreur inconnue' };
+            return { success: false, error: cleanError(err.message) };
         }
     });
+}
+function cleanError(msg) {
+    if (!msg)
+        return 'Une erreur est survenue';
+    // رسائل SQLite التقنية
+    if (msg.includes('UNIQUE constraint failed'))
+        return 'Cette valeur existe déjà (doublon)';
+    if (msg.includes('FOREIGN KEY constraint failed'))
+        return 'Référence invalide — vérifiez les données liées';
+    if (msg.includes('NOT NULL constraint failed'))
+        return 'Un champ obligatoire est manquant';
+    if (msg.includes('no such table'))
+        return 'Erreur de base de données — contactez le support';
+    if (msg.includes('database is locked'))
+        return 'Base de données occupée — réessayez dans un instant';
+    if (msg.includes('SQLITE_'))
+        return 'Erreur de base de données';
+    return msg;
 }

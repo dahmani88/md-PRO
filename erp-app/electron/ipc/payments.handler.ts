@@ -4,14 +4,16 @@ import { createPaymentEntry } from '../services/accounting.service'
 import { logAudit } from '../services/audit.service'
 
 export function registerPaymentHandlers(): void {
-  handle('payments:getAll', (filters?: { party_id?: number; party_type?: string; status?: string; document_id?: number }) => {
+  handle('payments:getAll', (filters?: { party_id?: number; party_type?: string; status?: string; document_id?: number; limit?: number; offset?: number }) => {
     const db = getDb()
     let query = `
       SELECT p.*,
-        CASE p.party_type WHEN 'client' THEN c.name WHEN 'supplier' THEN s.name END as party_name
+        CASE p.party_type WHEN 'client' THEN c.name WHEN 'supplier' THEN s.name END as party_name,
+        d.number as document_number
       FROM payments p
       LEFT JOIN clients   c ON c.id = p.party_id AND p.party_type = 'client'
       LEFT JOIN suppliers s ON s.id = p.party_id AND p.party_type = 'supplier'
+      LEFT JOIN documents d ON d.id = p.document_id
       WHERE 1=1
     `
     const params: any[] = []
@@ -21,7 +23,13 @@ export function registerPaymentHandlers(): void {
     if (filters?.status)     { query += ' AND p.status = ?';     params.push(filters.status) }
     if (filters?.document_id){ query += ' AND p.document_id = ?'; params.push(filters.document_id) }
 
-    query += ' ORDER BY p.date DESC'
+    query += ' ORDER BY p.created_at DESC, p.id DESC'
+
+    const limit  = filters?.limit  ?? 200
+    const offset = filters?.offset ?? 0
+    query += ' LIMIT ? OFFSET ?'
+    params.push(limit, offset)
+
     return db.prepare(query).all(...params)
   })
 
@@ -135,7 +143,7 @@ export function registerPaymentHandlers(): void {
 
 function updateInvoicePaymentStatus(db: any, documentId: number): void {
   const doc = db.prepare('SELECT total_ttc, type, status FROM documents WHERE id = ?').get(documentId) as any
-  if (!doc || ['cancelled', 'delivered'].includes(doc.status)) return
+  if (!doc || doc.status === 'cancelled') return
 
   const paid = (db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM payment_allocations WHERE document_id = ?').get(documentId) as any).total
 
@@ -154,11 +162,17 @@ function updateInvoicePaymentStatus(db: any, documentId: number): void {
 
   // تحديث حالة المستند الرئيسي
   if (payStatus === 'paid') {
+    // مدفوع بالكامل — دائماً paid بغض النظر عن حالة التوصيل
     db.prepare(`UPDATE documents SET status = 'paid', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(documentId)
   } else if (payStatus === 'partial') {
-    db.prepare(`UPDATE documents SET status = 'partial', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(documentId)
+    // دفع جزئي — لا نغير delivered إلى partial
+    if (!['delivered', 'paid'].includes(doc.status)) {
+      db.prepare(`UPDATE documents SET status = 'partial', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(documentId)
+    }
   } else {
-    // إعادة إلى confirmed عند إلغاء الدفعة (bounce شيك مثلاً)
-    db.prepare(`UPDATE documents SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('paid', 'partial')`).run(documentId)
+    // لا دفع — إعادة إلى confirmed عند إلغاء الدفعة (bounce شيك مثلاً)
+    if (['paid', 'partial'].includes(doc.status)) {
+      db.prepare(`UPDATE documents SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(documentId)
+    }
   }
 }

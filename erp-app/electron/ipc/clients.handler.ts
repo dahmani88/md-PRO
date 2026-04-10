@@ -17,7 +17,7 @@ export function registerClientHandlers(): void {
       params.push(s, s, s)
     }
 
-    query += ' ORDER BY name ASC LIMIT ? OFFSET ?'
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
     params.push(limit, offset)
 
     const rows = db.prepare(query).all(...params)

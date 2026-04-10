@@ -8,11 +8,12 @@ export function registerProductionHandlers(): void {
   handle('production:getBoms', (productId: number) => {
     const db = getDb()
     const boms = db.prepare(`
-      SELECT bt.*, 
+      SELECT bt.*,
         json_group_array(json_object(
           'id', bl.id, 'material_id', bl.material_id,
           'material_name', p.name, 'material_code', p.code,
-          'quantity', bl.quantity, 'unit', bl.unit
+          'quantity', bl.quantity, 'unit', bl.unit,
+          'cmup_price', p.cmup_price, 'stock_quantity', p.stock_quantity
         )) as lines
       FROM bom_templates bt
       LEFT JOIN bom_lines bl ON bl.bom_id = bt.id
@@ -200,10 +201,12 @@ export function registerProductionHandlers(): void {
     const db = getDb()
     const boms = db.prepare(`
       SELECT bt.*, pr.name as product_name, pr.code as product_code,
+        pr.stock_quantity as product_stock, pr.unit as product_unit,
         json_group_array(json_object(
           'id', bl.id, 'material_id', bl.material_id,
           'material_name', p.name, 'material_code', p.code,
-          'quantity', bl.quantity, 'unit', bl.unit
+          'quantity', bl.quantity, 'unit', bl.unit,
+          'cmup_price', p.cmup_price, 'stock_quantity', p.stock_quantity
         )) as lines
       FROM bom_templates bt
       JOIN products pr ON pr.id = bt.product_id

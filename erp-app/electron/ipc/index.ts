@@ -18,6 +18,7 @@ import { registerSettingsHandlers }      from './settings.handler'
 import { registerImportHandlers }        from './import.handler'
 import { registerAttachmentsHandlers }   from './attachments.handler'
 import { registerAuditHandlers }         from './audit.handler'
+import { registerSyncHandlers }          from './sync.handler'
 
 export function registerAllHandlers(): void {
   registerConfigHandlers()
@@ -39,6 +40,7 @@ export function registerAllHandlers(): void {
   registerImportHandlers()
   registerAttachmentsHandlers()
   registerAuditHandlers()
+  registerSyncHandlers()
 }
 
 // Helper: wrapper موحد لكل handler
@@ -52,7 +54,19 @@ export function handle(
       return { success: true, data: result }
     } catch (err: any) {
       console.error(`[IPC Error] ${channel}:`, err.message)
-      return { success: false, error: err.message ?? 'Erreur inconnue' }
+      return { success: false, error: cleanError(err.message) }
     }
   })
+}
+
+function cleanError(msg: string): string {
+  if (!msg) return 'Une erreur est survenue'
+  // رسائل SQLite التقنية
+  if (msg.includes('UNIQUE constraint failed')) return 'Cette valeur existe déjà (doublon)'
+  if (msg.includes('FOREIGN KEY constraint failed')) return 'Référence invalide — vérifiez les données liées'
+  if (msg.includes('NOT NULL constraint failed')) return 'Un champ obligatoire est manquant'
+  if (msg.includes('no such table')) return 'Erreur de base de données — contactez le support'
+  if (msg.includes('database is locked')) return 'Base de données occupée — réessayez dans un instant'
+  if (msg.includes('SQLITE_')) return 'Erreur de base de données'
+  return msg
 }

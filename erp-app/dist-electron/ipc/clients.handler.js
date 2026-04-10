@@ -16,7 +16,7 @@ function registerClientHandlers() {
             const s = `%${filters.search}%`;
             params.push(s, s, s);
         }
-        query += ' ORDER BY name ASC LIMIT ? OFFSET ?';
+        query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
         params.push(limit, offset);
         const rows = db.prepare(query).all(...params);
         const countQuery = filters?.search
@@ -26,9 +26,18 @@ function registerClientHandlers() {
         const total = db.prepare(countQuery).get(...countParams).c;
         // إضافة balance لكل عميل
         const rowsWithBalance = rows.map(client => {
-            const invRow = db.prepare(`SELECT COALESCE(SUM(total_ttc),0) as t FROM documents WHERE party_id=? AND party_type='client' AND type IN ('invoice') AND is_deleted=0 AND status IN ('confirmed','partial','paid','delivered')`).get(client.id);
-          const payRow = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE party_id=? AND party_type='client' AND NOT (method IN ('cheque','lcn') AND status='pending') AND status!='bounced'`).get(client.id);
-          const balance = (invRow.t ?? 0) - (payRow.t ?? 0);
+            const invRow = db.prepare(`
+        SELECT COALESCE(SUM(total_ttc), 0) as t FROM documents
+        WHERE party_id=? AND party_type='client' AND type='invoice'
+          AND is_deleted=0 AND status IN ('confirmed','partial','paid','delivered')
+      `).get(client.id);
+            const payRow = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) as t FROM payments
+        WHERE party_id=? AND party_type='client'
+          AND NOT (method IN ('cheque','lcn') AND status='pending')
+          AND status != 'bounced'
+      `).get(client.id);
+            const balance = (invRow.t ?? 0) - (payRow.t ?? 0);
             return { ...client, balance };
         });
         return { rows: rowsWithBalance, total, page, limit };
@@ -39,9 +48,18 @@ function registerClientHandlers() {
         if (!client)
             throw new Error('Client introuvable');
         // Solde: somme des TTC non payées (fac confirmées uniquement)
-        const invRow2 = db.prepare(`SELECT COALESCE(SUM(total_ttc),0) as t FROM documents WHERE party_id=? AND party_type='client' AND type IN ('invoice') AND is_deleted=0 AND status IN ('confirmed','partial','paid','delivered')`).get(id);
-      const payRow2 = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE party_id=? AND party_type='client' AND NOT (method IN ('cheque','lcn') AND status='pending') AND status!='bounced'`).get(id);
-      const balance = (invRow2.t ?? 0) - (payRow2.t ?? 0);
+        const invRow2 = db.prepare(`
+      SELECT COALESCE(SUM(total_ttc), 0) as t FROM documents
+      WHERE party_id=? AND party_type='client' AND type='invoice'
+        AND is_deleted=0 AND status IN ('confirmed','partial','paid','delivered')
+    `).get(id);
+        const payRow2 = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) as t FROM payments
+      WHERE party_id=? AND party_type='client'
+        AND NOT (method IN ('cheque','lcn') AND status='pending')
+        AND status != 'bounced'
+    `).get(id);
+        const balance = (invRow2.t ?? 0) - (payRow2.t ?? 0);
         return { ...client, balance };
     });
     (0, index_1.handle)('clients:create', (data) => {

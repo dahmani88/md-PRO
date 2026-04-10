@@ -45,6 +45,12 @@ function createDocument(data) {
     let total_ht = 0;
     let total_tva = 0;
     const computedLines = data.lines.map(line => {
+        if (line.quantity <= 0)
+            throw new Error(`La quantité doit être supérieure à 0`);
+        if (line.unit_price < 0)
+            throw new Error(`Le prix unitaire ne peut pas être négatif`);
+        if ((line.discount ?? 0) < 0 || (line.discount ?? 0) > 100)
+            throw new Error(`La remise doit être entre 0 et 100%`);
         const ht = line.quantity * line.unit_price * (1 - (line.discount ?? 0) / 100);
         const tva = ht * ((line.tva_rate ?? 20) / 100);
         total_ht += ht;
@@ -121,10 +127,35 @@ function confirmDocument(id, userId) {
             const linkedInvoice = db.prepare(`
         SELECT d.id, d.total_ttc FROM document_links dl
         JOIN documents d ON d.id = dl.parent_id
-        WHERE dl.child_id = ? AND d.type = 'invoice' AND d.status = 'confirmed'
+        WHERE dl.child_id = ? AND d.type = 'invoice' AND d.status IN ('confirmed','partial')
       `).get(id);
             if (linkedInvoice) {
-                db.prepare(`UPDATE documents SET status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(linkedInvoice.id);
+                // حساب الكميات المُسلَّمة مقابل المطلوبة
+                const invLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(linkedInvoice.id);
+                const blIds = db.prepare(`
+          SELECT dl.child_id as id FROM document_links dl
+          JOIN documents d ON d.id = dl.child_id
+          WHERE dl.parent_id = ? AND d.type = 'bl' AND d.status != 'cancelled'
+        `).all(linkedInvoice.id).map((r) => r.id);
+                const delivered = {};
+                for (const blId of blIds) {
+                    for (const l of db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(blId)) {
+                        const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`;
+                        delivered[key] = (delivered[key] ?? 0) + Number(l.quantity);
+                    }
+                }
+                const fullyDelivered = invLines.every((l) => {
+                    const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`;
+                    return (delivered[key] ?? 0) >= Number(l.quantity);
+                });
+                // نحافظ على حالة الدفع — إذا كانت paid تبقى paid
+                const currentStatus = db.prepare('SELECT status FROM documents WHERE id = ?').get(linkedInvoice.id);
+                if (currentStatus?.status === 'paid') {
+                    // مدفوعة بالكامل — لا نغير الحالة
+                }
+                else if (!['cancelled'].includes(currentStatus?.status)) {
+                    db.prepare(`UPDATE documents SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(fullyDelivered ? 'delivered' : 'partial', linkedInvoice.id);
+                }
             }
         }
         else if (doc.type === 'bl_reception') {
@@ -159,7 +190,8 @@ function confirmDocument(id, userId) {
         `).all(poId).map((r) => r.id);
                 const received = {};
                 for (const brId of brIds) {
-                    for (const l of db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(brId)) {
+                    const brLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(brId);
+                    for (const l of brLines) {
                         const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`;
                         received[key] = (received[key] ?? 0) + Number(l.quantity);
                     }
@@ -168,9 +200,7 @@ function confirmDocument(id, userId) {
                     const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`;
                     return (received[key] ?? 0) >= Number(l.quantity);
                 });
-                db.prepare(`UPDATE documents SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(
-                    fullyReceived ? 'received' : 'partial', poId
-                );
+                db.prepare(`UPDATE documents SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(fullyReceived ? 'received' : 'partial', poId);
             }
         }
         else if (doc.type === 'avoir') {
@@ -182,7 +212,7 @@ function confirmDocument(id, userId) {
                         continue;
                     (0, stock_service_1.createStockMovement)(db, {
                         product_id: line.product_id,
-                        type: 'in',
+                        type: 'in', // إرجاع = دخول مخزون
                         quantity: line.quantity,
                         unit_cost: line.unit_price,
                         document_id: id,
@@ -211,6 +241,7 @@ function confirmDocument(id, userId) {
           WHERE dl.child_id = ? AND d.type = 'invoice'
         `).get(id);
                 if (link?.parent_id) {
+                    // نُنشئ payment record من نوع 'avoir' لتمثيل التخفيض
                     const payResult = db.prepare(`
             INSERT INTO payments (party_id, party_type, amount, method, date, status, document_id, notes, created_by)
             VALUES (?, ?, ?, 'avoir', ?, 'cleared', ?, ?, 1)
@@ -222,7 +253,8 @@ function confirmDocument(id, userId) {
                     if (paid >= invDoc.total_ttc - 0.01) {
                         db.prepare(`UPDATE documents SET status = 'paid', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(link.parent_id);
                         db.prepare('UPDATE doc_invoices SET payment_status = ? WHERE document_id = ?').run('paid', link.parent_id);
-                    } else if (paid > 0) {
+                    }
+                    else if (paid > 0) {
                         db.prepare(`UPDATE documents SET status = 'partial', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(link.parent_id);
                         db.prepare('UPDATE doc_invoices SET payment_status = ? WHERE document_id = ?').run('partial', link.parent_id);
                     }

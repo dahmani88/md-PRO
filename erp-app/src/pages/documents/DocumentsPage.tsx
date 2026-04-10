@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import InvoicesList from './InvoicesList'
-import PaymentHistoryPage from './PaymentHistoryPage'
 
 const DOC_TYPES = [
   { id: 'invoice',  label: 'Factures',         icon: '🧾' },
@@ -8,7 +7,6 @@ const DOC_TYPES = [
   { id: 'bl',       label: 'Bons de Livraison', icon: '🚚' },
   { id: 'proforma', label: 'Proforma',          icon: '📄' },
   { id: 'avoir',    label: 'Avoirs',            icon: '↩️' },
-  { id: 'payments', label: 'Historique Paiements', icon: '💳' },
 ] as const
 
 type DocTypeId = typeof DOC_TYPES[number]['id']
@@ -32,10 +30,7 @@ export default function DocumentsPage() {
         </div>
       </div>
       <div className="flex-1 overflow-hidden p-4">
-        {activeType === 'payments'
-          ? <PaymentHistoryPage />
-          : <InvoicesList docType={activeType} />
-        }
+        <InvoicesList docType={activeType} />
       </div>
     </div>
   )

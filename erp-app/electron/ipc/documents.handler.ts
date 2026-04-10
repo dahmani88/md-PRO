@@ -313,7 +313,7 @@ export function registerDocumentHandlers(): void {
     const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id) as any
     if (!doc) throw new Error('Document introuvable')
     if (doc.status === 'cancelled') throw new Error('Document déjà annulé')
-    if (doc.status === 'paid') throw new Error('Impossible d'annuler un document payé')
+    if (doc.status === 'paid') throw new Error("Impossible d'annuler un document payé")
 
     const tx = db.transaction(() => {
       // 1. Annuler mouvements en attente
@@ -500,19 +500,120 @@ export function registerDocumentHandlers(): void {
     return { success: true }
   })
 
+  // ── Timeline d'un document ───────────────────────────────────────────────
+  handle('documents:getTimeline', (docId: number) => {
+    const db = getDb()
+    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(docId) as any
+    if (!doc) throw new Error('Document introuvable')
+
+    const events: { date: string; type: string; label: string; detail?: string; icon: string }[] = []
+
+    // 1. Création
+    events.push({
+      date: doc.created_at,
+      type: 'created',
+      label: 'Document créé',
+      detail: `N° ${doc.number}`,
+      icon: '📝',
+    })
+
+    // 2. Confirmation (via audit_log)
+    const confirmLog = db.prepare(`
+      SELECT created_at, user_id FROM audit_log
+      WHERE table_name = 'documents' AND record_id = ? AND action = 'CONFIRM'
+      ORDER BY created_at ASC LIMIT 1
+    `).get(docId) as any
+    if (confirmLog) {
+      events.push({
+        date: confirmLog.created_at,
+        type: 'confirmed',
+        label: 'Document confirmé',
+        icon: '✅',
+      })
+    }
+
+    // 3. Paiements
+    const payments = db.prepare(`
+      SELECT p.date, p.amount, p.method, p.status, p.created_at
+      FROM payment_allocations pa
+      JOIN payments p ON p.id = pa.payment_id
+      WHERE pa.document_id = ?
+      ORDER BY p.created_at ASC
+    `).all(docId) as any[]
+    const fmt = (n: number) => new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2 }).format(n)
+    const methodLabel: Record<string, string> = { cash: 'Espèces', bank: 'Virement', cheque: 'Chèque', lcn: 'LCN', avoir: 'Avoir' }
+    for (const p of payments) {
+      events.push({
+        date: p.created_at,
+        type: 'payment',
+        label: `Paiement — ${fmt(p.amount)} MAD`,
+        detail: methodLabel[p.method] ?? p.method,
+        icon: '💰',
+      })
+    }
+
+    // 4. BL liés (livraisons)
+    const bls = db.prepare(`
+      SELECT d.number, d.date, d.created_at, d.status FROM document_links dl
+      JOIN documents d ON d.id = dl.child_id
+      WHERE dl.parent_id = ? AND d.type = 'bl' AND d.status != 'cancelled'
+      ORDER BY d.created_at ASC
+    `).all(docId) as any[]
+    for (const bl of bls) {
+      events.push({
+        date: bl.created_at,
+        type: 'delivery',
+        label: `Bon de livraison — ${bl.number}`,
+        detail: bl.status === 'delivered' ? 'Stock appliqué' : 'En attente',
+        icon: '🚚',
+      })
+    }
+
+    // 5. Avoirs liés
+    const avoirs = db.prepare(`
+      SELECT d.number, d.date, d.created_at, d.total_ttc FROM document_links dl
+      JOIN documents d ON d.id = dl.child_id
+      WHERE dl.parent_id = ? AND d.type = 'avoir' AND d.status != 'cancelled'
+      ORDER BY d.created_at ASC
+    `).all(docId) as any[]
+    for (const av of avoirs) {
+      events.push({
+        date: av.created_at,
+        type: 'avoir',
+        label: `Avoir — ${av.number}`,
+        detail: `${fmt(av.total_ttc)} MAD`,
+        icon: '↩️',
+      })
+    }
+
+    // 6. Annulation
+    const cancelLog = db.prepare(`
+      SELECT created_at FROM audit_log
+      WHERE table_name = 'documents' AND record_id = ? AND action = 'CANCEL'
+      ORDER BY created_at ASC LIMIT 1
+    `).get(docId) as any
+    if (cancelLog) {
+      events.push({
+        date: cancelLog.created_at,
+        type: 'cancelled',
+        label: 'Document annulé',
+        icon: '🚫',
+      })
+    }
+
+    // ترتيب زمني
+    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  })
+
   // ── Résumé réception partielle pour un BC ────────────────────────────────
   handle('documents:getPOReceiptStatus', (poId: number) => {
     const db = getDb()
     const poLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(poId) as any[]
-
-    // Toutes les BR liées à ce BC (non annulées)
     const brIds = (db.prepare(`
       SELECT dl.child_id as id FROM document_links dl
       JOIN documents d ON d.id = dl.child_id
       WHERE dl.parent_id = ? AND d.type = 'bl_reception' AND d.status != 'cancelled'
     `).all(poId) as any[]).map((r: any) => r.id)
-
-    // Quantités déjà reçues par product_id / description
     const received: Record<string, number> = {}
     for (const brId of brIds) {
       const brLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(brId) as any[]
@@ -521,12 +622,43 @@ export function registerDocumentHandlers(): void {
         received[key] = (received[key] ?? 0) + Number(l.quantity)
       }
     }
-
     const summary = poLines.map((l: any) => {
       const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`
       const qtyOrdered  = Number(l.quantity)
       const qtyReceived = received[key] ?? 0
-      const qtyRemaining = Math.max(0, qtyOrdered - qtyReceived)
+      return { id: l.id, product_id: l.product_id, description: l.description, unit_price: l.unit_price, discount: l.discount, tva_rate: l.tva_rate, qty_ordered: qtyOrdered, qty_received: qtyReceived, qty_remaining: Math.max(0, qtyOrdered - qtyReceived) }
+    })
+    const fullyReceived = summary.every((l: any) => l.qty_remaining <= 0)
+    return { summary, fullyReceived, brCount: brIds.length }
+  })
+
+  // ── Résumé livraison partielle pour une Facture ─────────────────────────
+  handle('documents:getBLDeliveryStatus', (invoiceId: number) => {
+    const db = getDb()
+    const invLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(invoiceId) as any[]
+
+    // Tous les BL liés à cette facture (non annulés)
+    const blIds = (db.prepare(`
+      SELECT dl.child_id as id FROM document_links dl
+      JOIN documents d ON d.id = dl.child_id
+      WHERE dl.parent_id = ? AND d.type = 'bl' AND d.status != 'cancelled'
+    `).all(invoiceId) as any[]).map((r: any) => r.id)
+
+    // Quantités déjà livrées
+    const delivered: Record<string, number> = {}
+    for (const blId of blIds) {
+      const blLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(blId) as any[]
+      for (const l of blLines) {
+        const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`
+        delivered[key] = (delivered[key] ?? 0) + Number(l.quantity)
+      }
+    }
+
+    const summary = invLines.map((l: any) => {
+      const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`
+      const qtyOrdered   = Number(l.quantity)
+      const qtyDelivered = delivered[key] ?? 0
+      const qtyRemaining = Math.max(0, qtyOrdered - qtyDelivered)
       return {
         id:            l.id,
         product_id:    l.product_id,
@@ -535,12 +667,12 @@ export function registerDocumentHandlers(): void {
         discount:      l.discount,
         tva_rate:      l.tva_rate,
         qty_ordered:   qtyOrdered,
-        qty_received:  qtyReceived,
+        qty_delivered: qtyDelivered,
         qty_remaining: qtyRemaining,
       }
     })
 
-    const fullyReceived = summary.every((l: any) => l.qty_remaining <= 0)
-    return { summary, fullyReceived, brCount: brIds.length }
+    const fullyDelivered = summary.every((l: any) => l.qty_remaining <= 0)
+    return { summary, fullyDelivered, blCount: blIds.length }
   })
 }

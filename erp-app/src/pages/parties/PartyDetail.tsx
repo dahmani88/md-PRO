@@ -239,7 +239,13 @@ export default function PartyDetail({ id, type, onUpdated }: Props) {
                 {filteredDocs.map(d => {
                   const st = STATUS_DOC[d.status] ?? { label: d.status, cls: 'badge-gray' }
                   return (
-                    <tr key={d.id} onClick={() => setSelectedDocId(d.id)}
+                    <tr key={d.id} onMouseDown={e => { (e.currentTarget as any)._mdX = e.clientX; (e.currentTarget as any)._mdY = e.clientY }}
+                  onClick={e => {
+                    const el = e.currentTarget as any
+                    if (Math.abs(e.clientX-(el._mdX??e.clientX))>5||Math.abs(e.clientY-(el._mdY??e.clientY))>5) return
+                    if ((e.target as HTMLElement).closest('button')) return
+                    setSelectedDocId(d.id)
+                  }}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors">
                       <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">{d.number}</td>
                       <td className="px-3 py-2.5 text-gray-500 text-xs">{new Date(d.date).toLocaleDateString('fr-FR')}</td>

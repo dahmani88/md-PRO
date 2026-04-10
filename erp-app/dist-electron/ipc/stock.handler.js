@@ -12,9 +12,11 @@ function registerStockHandlers() {
         const offset = (page - 1) * limit;
         const params = [];
         let query = `
-      SELECT sm.*, p.name as product_name, p.unit, p.code as product_code
+      SELECT sm.*, p.name as product_name, p.unit, p.code as product_code,
+             d.number as document_number, d.type as document_type
       FROM stock_movements sm
       JOIN products p ON p.id = sm.product_id
+      LEFT JOIN documents d ON d.id = sm.document_id
       WHERE sm.applied != -1
     `;
         if (filters?.product_id !== undefined) {
@@ -34,12 +36,23 @@ function registerStockHandlers() {
         (0, stock_service_1.applyMovement)(db, id, userId);
         // Si tous les mouvements du document sont appliqués → statut 'delivered'
         const mov = db.prepare('SELECT document_id FROM stock_movements WHERE id = ?').get(id);
-        if (mov && mov.document_id) {
+        if (mov?.document_id) {
             const pending = db.prepare('SELECT COUNT(*) as c FROM stock_movements WHERE document_id = ? AND applied = 0').get(mov.document_id);
-            if (pending && pending.c === 0) {
+            if (pending?.c === 0) {
                 db.prepare(`UPDATE documents SET status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'confirmed' AND type IN ('bl_reception','bl','avoir')`).run(mov.document_id);
             }
         }
+        return { success: true };
+    });
+    (0, index_1.handle)('stock:deleteMovement', (id) => {
+        const db = (0, connection_1.getDb)();
+        // فقط الحركات غير المطبقة يمكن حذفها
+        const mov = db.prepare('SELECT applied FROM stock_movements WHERE id = ?').get(id);
+        if (!mov)
+            throw new Error('Mouvement introuvable');
+        if (mov.applied === 1)
+            throw new Error('Impossible de supprimer un mouvement déjà appliqué');
+        db.prepare('DELETE FROM stock_movements WHERE id = ?').run(id);
         return { success: true };
     });
     (0, index_1.handle)('stock:createManual', (data) => {

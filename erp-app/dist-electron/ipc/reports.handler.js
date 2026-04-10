@@ -30,6 +30,8 @@ function registerReportHandlers() {
                 return getPayablesReport(db, filters);
             case 'overdue':
                 return getOverdueReport(db, filters);
+            case 'production':
+                return getProductionReport(db, filters);
             default:
                 throw new Error(`Type de rapport inconnu: ${type}`);
         }
@@ -107,17 +109,9 @@ function getReceivablesReport(db, _filters) {
     ORDER BY balance DESC
   `).all();
 }
-function getChequesReport(db, filters) {
-    const params = [];
-    let where = "WHERE p.method IN ('cheque', 'lcn') AND p.status = 'pending'";
-    if (filters.start_date) {
-        where += ' AND p.due_date >= ?';
-        params.push(filters.start_date);
-    }
-    if (filters.end_date) {
-        where += ' AND p.due_date <= ?';
-        params.push(filters.end_date);
-    }
+function getChequesReport(db, _filters) {
+    // نُرجع كل الشيكات/LCN المعلقة بدون فلتر تاريخ
+    // الفلترة على 7 أيام تتم في الـ frontend
     return db.prepare(`
     SELECT p.id, p.amount, p.method, p.date, p.due_date,
       p.cheque_number, p.bank, p.status, p.party_type,
@@ -125,9 +119,9 @@ function getChequesReport(db, filters) {
     FROM payments p
     LEFT JOIN clients   c ON c.id = p.party_id AND p.party_type = 'client'
     LEFT JOIN suppliers s ON s.id = p.party_id AND p.party_type = 'supplier'
-    ${where}
+    WHERE p.method IN ('cheque', 'lcn') AND p.status = 'pending'
     ORDER BY p.due_date ASC
-  `).all(...params);
+  `).all();
 }
 function getProfitLossReport(db, filters) {
     const params = [];
@@ -240,8 +234,31 @@ function getPaymentsReport(db, filters) {
     ORDER BY p.date DESC
   `).all(...params);
 }
-function getOverdueReport(db, _filters) {
+function getPayablesReport(db, _filters) {
+    // تقرير الذمم الدائنة — ديون الموردين
+    return db.prepare(`
+    SELECT s.name as supplier_name, s.phone, s.ice,
+      COALESCE(SUM(d.total_ttc), 0) as total_invoiced,
+      COALESCE(SUM(pa.amount), 0)   as total_paid,
+      COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
+    FROM suppliers s
+    LEFT JOIN documents d ON d.party_id = s.id AND d.party_type = 'supplier'
+      AND d.type IN ('purchase_invoice','import_invoice')
+      AND d.is_deleted = 0 AND d.status != 'cancelled'
+    LEFT JOIN payment_allocations pa ON pa.document_id = d.id
+    GROUP BY s.id
+    HAVING balance > 0
+    ORDER BY balance DESC
+  `).all();
+}
+function getOverdueReport(db, filters) {
     const today = new Date().toISOString().split('T')[0];
+    const extraParams = [today, today];
+    let extra = '';
+    if (filters.client_id) {
+        extra += ' AND d.party_id = ?';
+        extraParams.push(filters.client_id);
+    }
     return db.prepare(`
     SELECT
       d.number,
@@ -264,25 +281,51 @@ function getOverdueReport(db, _filters) {
       AND di.due_date IS NOT NULL
       AND di.due_date != ''
       AND di.due_date < ?
+      ${extra}
     GROUP BY d.id
     HAVING remaining > 0.01
     ORDER BY days_overdue DESC
-  `).all(today, today);
+  `).all(...extraParams);
 }
-function getPayablesReport(db, _filters) {
-    // تقرير الذمم الدائنة — ديون الموردين
-    return db.prepare(`
-    SELECT s.name as supplier_name, s.phone, s.ice,
-      COALESCE(SUM(d.total_ttc), 0) as total_invoiced,
-      COALESCE(SUM(pa.amount), 0)   as total_paid,
-      COALESCE(SUM(d.total_ttc), 0) - COALESCE(SUM(pa.amount), 0) as balance
-    FROM suppliers s
-    LEFT JOIN documents d ON d.party_id = s.id AND d.party_type = 'supplier'
-      AND d.type IN ('purchase_invoice','import_invoice')
-      AND d.is_deleted = 0 AND d.status != 'cancelled'
-    LEFT JOIN payment_allocations pa ON pa.document_id = d.id
-    GROUP BY s.id
-    HAVING balance > 0
-    ORDER BY balance DESC
-  `).all();
+function getProductionReport(db, filters) {
+    const params = [];
+    let where = "WHERE po.is_deleted = 0 AND po.status = 'confirmed'";
+    if (filters.start_date) {
+        where += ' AND po.date >= ?';
+        params.push(filters.start_date);
+    }
+    if (filters.end_date) {
+        where += ' AND po.date <= ?';
+        params.push(filters.end_date);
+    }
+    const orders = db.prepare(`
+    SELECT po.id, po.date, po.quantity, po.unit_cost, po.total_cost, po.status,
+      p.name as product_name, p.code as product_code, p.unit,
+      bt.name as bom_name
+    FROM production_orders po
+    JOIN products p ON p.id = po.product_id
+    LEFT JOIN bom_templates bt ON bt.id = po.bom_id
+    ${where}
+    ORDER BY po.date DESC
+  `).all(...params);
+    const totalOrders = orders.length;
+    const totalQty = orders.reduce((s, o) => s + o.quantity, 0);
+    const totalCost = orders.reduce((s, o) => s + o.total_cost, 0);
+    const avgUnitCost = totalQty > 0 ? totalCost / totalQty : 0;
+    // par produit
+    const byProduct = {};
+    for (const o of orders) {
+        const key = o.product_code;
+        if (!byProduct[key]) {
+            byProduct[key] = { product_name: o.product_name, product_code: o.product_code, unit: o.unit, qty: 0, cost: 0, orders: 0 };
+        }
+        byProduct[key].qty += o.quantity;
+        byProduct[key].cost += o.total_cost;
+        byProduct[key].orders += 1;
+    }
+    return {
+        orders,
+        summary: { totalOrders, totalQty, totalCost, avgUnitCost },
+        byProduct: Object.values(byProduct).sort((a, b) => b.cost - a.cost),
+    };
 }

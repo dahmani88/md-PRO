@@ -155,6 +155,11 @@ export default function ImportInvoiceForm({ editDocId, defaultValues, onSaved, o
       }
 
       if (isEdit) {
+        // فقط يمكن تعديل المسودات
+        const current = await api.getDocument(editDocId!) as any
+        if (current.status !== 'draft') {
+          throw new Error('Impossible de modifier une importation déjà confirmée. Annulez-la d\'abord.')
+        }
         await api.cancelDocument(editDocId!)
       }
 

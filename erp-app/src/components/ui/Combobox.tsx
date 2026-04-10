@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 export interface ComboboxItem {
   id: number
@@ -23,12 +24,42 @@ export function Combobox({
   items, value, onChange, onSelect,
   placeholder = 'Rechercher...', error, disabled, maxItems = 12,
 }: Props) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [open, setOpen]       = useState(false)
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 })
+  const inputRef = useRef<HTMLInputElement>(null)
+  const wrapRef  = useRef<HTMLDivElement>(null)
+
+  // حساب موضع الـ dropdown بناءً على موضع الـ input في الصفحة
+  function updatePos() {
+    if (!inputRef.current) return
+    const rect = inputRef.current.getBoundingClientRect()
+    setDropPos({
+      top:   rect.bottom + window.scrollY + 4,
+      left:  rect.left   + window.scrollX,
+      width: rect.width,
+    })
+  }
 
   useEffect(() => {
+    if (!open) return
+    updatePos()
+    window.addEventListener('scroll', updatePos, true)
+    window.addEventListener('resize', updatePos)
+    return () => {
+      window.removeEventListener('scroll', updatePos, true)
+      window.removeEventListener('resize', updatePos)
+    }
+  }, [open])
+
+  // إغلاق عند الضغط خارج
+  useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (wrapRef.current?.contains(target)) return
+      // تحقق من الـ portal dropdown أيضاً
+      const portal = document.getElementById('combobox-portal')
+      if (portal?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -37,26 +68,31 @@ export function Combobox({
   const filtered = value.trim()
     ? items.filter(i =>
         i.label.toLowerCase().includes(value.toLowerCase()) ||
-        (i.sub ?? '').toLowerCase().includes(value.toLowerCase())
+        (i.sub ?? '').toLowerCase().includes(value.toLowerCase()) ||
+        (`${i.sub} ${i.label}`).toLowerCase().includes(value.toLowerCase()) ||
+        (`${i.sub} — ${i.label}`).toLowerCase().includes(value.toLowerCase())
       )
     : items
 
-  return (
-    <div ref={ref} className="relative">
-      <input
-        value={value}
-        onChange={e => { onChange(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
-        disabled={disabled}
-        autoComplete="off"
-        spellCheck={false}
-        className={`input w-full ${error ? 'border-red-400 focus:ring-red-400' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-        placeholder={placeholder}
-      />
-      {open && filtered.length > 0 && (
-        <div className="absolute top-full left-0 right-0 z-[100] mt-1
-          bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
-          rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+  const dropdown = open ? (
+    <div
+      id="combobox-portal"
+      style={{
+        position: 'absolute',
+        top:      dropPos.top,
+        left:     dropPos.left,
+        width:    dropPos.width,
+        zIndex:   9999,
+      }}
+      className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+        rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto"
+    >
+      {filtered.length === 0 && value.trim().length > 0 ? (
+        <div className="px-4 py-3 text-sm text-gray-400 text-center">
+          Aucun résultat pour « {value} »
+        </div>
+      ) : (
+        <>
           {filtered.slice(0, maxItems).map(item => (
             <button
               key={item.id}
@@ -85,7 +121,9 @@ export function Combobox({
                   </span>
                 )}
                 {item.extra && (
-                  <span className="text-xs font-semibold text-orange-500">{item.extra}</span>
+                  <span className={`text-xs font-semibold ${item.extra.includes('⚠') ? 'text-red-500' : 'text-gray-500'}`}>
+                    {item.extra}
+                  </span>
                 )}
               </div>
             </button>
@@ -95,15 +133,25 @@ export function Combobox({
               +{filtered.length - maxItems} résultats — affinez la recherche
             </div>
           )}
-        </div>
+        </>
       )}
-      {open && filtered.length === 0 && value.trim().length > 0 && (
-        <div className="absolute top-full left-0 right-0 z-[100] mt-1
-          bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
-          rounded-xl shadow-xl px-4 py-3 text-sm text-gray-400 text-center">
-          Aucun résultat pour « {value} »
-        </div>
-      )}
+    </div>
+  ) : null
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => { updatePos(); setOpen(true) }}
+        disabled={disabled}
+        autoComplete="off"
+        spellCheck={false}
+        className={`input w-full ${error ? 'border-red-400 focus:ring-red-400' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        placeholder={placeholder}
+      />
+      {typeof document !== 'undefined' && createPortal(dropdown, document.body)}
     </div>
   )
 }

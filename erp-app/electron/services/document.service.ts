@@ -69,6 +69,9 @@ export function createDocument(data: {
   let total_tva = 0
 
   const computedLines = data.lines.map(line => {
+    if (line.quantity <= 0) throw new Error(`La quantité doit être supérieure à 0`)
+    if (line.unit_price < 0) throw new Error(`Le prix unitaire ne peut pas être négatif`)
+    if ((line.discount ?? 0) < 0 || (line.discount ?? 0) > 100) throw new Error(`La remise doit être entre 0 et 100%`)
     const ht = line.quantity * line.unit_price * (1 - (line.discount ?? 0) / 100)
     const tva = ht * ((line.tva_rate ?? 20) / 100)
     total_ht += ht
@@ -77,6 +80,15 @@ export function createDocument(data: {
   })
 
   const total_ttc = total_ht + total_tva
+
+  // التحقق من الأوفر: لا يمكن أن يتجاوز قيمة الفاتورة الأصلية
+  if (data.type === 'avoir' && data.extra?.source_invoice_id) {
+    const db = getDb()
+    const sourceInvoice = db.prepare('SELECT total_ttc FROM documents WHERE id = ? AND is_deleted = 0').get(data.extra.source_invoice_id as number) as any
+    if (sourceInvoice && total_ttc > sourceInvoice.total_ttc + 0.01) {
+      throw new Error(`L'avoir (${total_ttc.toFixed(2)} MAD) ne peut pas dépasser la facture source (${sourceInvoice.total_ttc.toFixed(2)} MAD)`)
+    }
+  }
 
   const tx = db.transaction(() => {
     // إدراج المستند الرئيسي
@@ -167,10 +179,36 @@ export function confirmDocument(id: number, userId: number): void {
       const linkedInvoice = db.prepare(`
         SELECT d.id, d.total_ttc FROM document_links dl
         JOIN documents d ON d.id = dl.parent_id
-        WHERE dl.child_id = ? AND d.type = 'invoice' AND d.status = 'confirmed'
+        WHERE dl.child_id = ? AND d.type = 'invoice' AND d.status IN ('confirmed','partial')
       `).get(id) as any
       if (linkedInvoice) {
-        db.prepare(`UPDATE documents SET status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(linkedInvoice.id)
+        // حساب الكميات المُسلَّمة مقابل المطلوبة
+        const invLines = db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(linkedInvoice.id) as any[]
+        const blIds = (db.prepare(`
+          SELECT dl.child_id as id FROM document_links dl
+          JOIN documents d ON d.id = dl.child_id
+          WHERE dl.parent_id = ? AND d.type = 'bl' AND d.status != 'cancelled'
+        `).all(linkedInvoice.id) as any[]).map((r: any) => r.id)
+        const delivered: Record<string, number> = {}
+        for (const blId of blIds) {
+          for (const l of db.prepare('SELECT * FROM document_lines WHERE document_id = ?').all(blId) as any[]) {
+            const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`
+            delivered[key] = (delivered[key] ?? 0) + Number(l.quantity)
+          }
+        }
+        const fullyDelivered = invLines.every((l: any) => {
+          const key = l.product_id ? `p_${l.product_id}` : `d_${l.description}`
+          return (delivered[key] ?? 0) >= Number(l.quantity)
+        })
+        // نحافظ على حالة الدفع — إذا كانت paid تبقى paid
+        const currentStatus = db.prepare('SELECT status FROM documents WHERE id = ?').get(linkedInvoice.id) as any
+        if (currentStatus?.status === 'paid') {
+          // مدفوعة بالكامل — لا نغير الحالة
+        } else if (!['cancelled'].includes(currentStatus?.status)) {
+          db.prepare(`UPDATE documents SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(
+            fullyDelivered ? 'delivered' : 'partial', linkedInvoice.id
+          )
+        }
       }
     } else if (doc.type === 'bl_reception') {
       // Bon de réception → دخول مخزون

@@ -54,6 +54,7 @@ export default function RapportsPage() {
   // Activité récente
   const [recentInvoices, setRecentInvoices] = useState<any[]>([])
   const [recentPayments, setRecentPayments] = useState<any[]>([])
+  const [productionStats, setProductionStats] = useState<any>(null)
 
   const getRange = useCallback(() => {
     const now = new Date()
@@ -86,12 +87,13 @@ export default function RapportsPage() {
         api.getReport({ type: 'stock',       filters: {} }),
         api.getReport({ type: 'receivables', filters: {} }),
         api.getReport({ type: 'payables',    filters: {} }),
-        api.getReport({ type: 'cheques',     filters: { start_date: from, end_date: to } }),
+        api.getReport({ type: 'cheques',     filters: {} }),
         api.getTvaDeclaration({ start_date: from, end_date: to }),
         api.getDocuments({ type: 'invoice', limit: 5 }),
         api.getPayments({ limit: 5 }),
         api.getNotifications(),
         api.getReport({ type: 'overdue', filters: {} }),
+        api.getReport({ type: 'production', filters: { start_date: from, end_date: to } }),
       ])
 
       const get = (i: number): any => results[i].status === 'fulfilled' ? results[i].value : null
@@ -109,6 +111,7 @@ export default function RapportsPage() {
       const paymentsR    = get(10)
       const notifR       = get(11)
       const overdueR     = get(12)
+      const productionR  = get(13)
 
       // log errors
       results.forEach((r, i) => {
@@ -164,15 +167,22 @@ export default function RapportsPage() {
         deductible: tvaR?.totalRecuperable ?? 0,
       })
 
-      // chèques urgents (7 jours) — seulement les pending
+      // شيكات: المتأخرة + التي تستحق خلال 7 أيام
       const today = new Date(); today.setHours(0,0,0,0)
+      const in7days = new Date(today.getTime() + 7 * 86400000)
       const urgent = chequesArr.filter((c: any) => {
-        if (!c.due_date) return false
-        if (c.status !== 'pending') return false  // exclure cleared/bounced
-        const d = new Date(c.due_date); d.setHours(0,0,0,0)
-        return d <= new Date(today.getTime() + 7 * 86400000)
-      }).sort((a: any, b: any) => a.due_date.localeCompare(b.due_date))
-      setCheques(urgent.slice(0, 6))
+        if (c.status !== 'pending') return false
+        if (!c.due_date) return true  // شيك بدون تاريخ استحقاق → يظهر دائماً
+        const d = new Date(c.due_date)
+        if (isNaN(d.getTime())) return true  // تاريخ غير صحيح → يظهر
+        d.setHours(0,0,0,0)
+        return d <= in7days
+      }).sort((a: any, b: any) => {
+        if (!a.due_date) return 1
+        if (!b.due_date) return -1
+        return a.due_date.localeCompare(b.due_date)
+      })
+      setCheques(urgent.slice(0, 10))
 
       setOverdueInvoices(overdueArr.slice(0, 5))
 
@@ -183,12 +193,19 @@ export default function RapportsPage() {
 
       setRecentInvoices(toArr(recentDocsR).slice(0, 5))
       setRecentPayments(toArr(paymentsR).slice(0, 5))
+      setProductionStats(productionR ?? null)
 
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [getRange])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('app:refresh', h)
+    return () => window.removeEventListener('app:refresh', h)
+  }, [load])
 
   const profit       = kpi.sales - kpi.purchases
   const profitMargin = kpi.sales > 0 ? (profit / kpi.sales) * 100 : 0
@@ -331,22 +348,29 @@ export default function RapportsPage() {
             )}
           </h3>
           {cheques.length === 0 ? (
-            <div className="text-xs text-gray-400 text-center py-6">Aucun chèque dans les 7 prochains jours</div>
+            <div className="text-xs text-gray-400 text-center py-6">Aucun chèque en attente</div>
           ) : (
             <div className="space-y-2">
               {cheques.map((c: any, i) => {
-                const days = Math.ceil((new Date(c.due_date).getTime() - Date.now()) / 86400000)
+                const dueDate = c.due_date ? new Date(c.due_date) : null
+                const validDate = dueDate && !isNaN(dueDate.getTime())
+                const days = validDate ? Math.ceil((dueDate!.getTime() - Date.now()) / 86400000) : null
+                const isOverdue = days !== null && days < 0
                 return (
                   <div key={i} className={`flex items-center justify-between text-xs rounded-lg px-3 py-2
-                    ${days < 0 ? 'bg-red-50 dark:bg-red-900/20' : days === 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-amber-50 dark:bg-amber-900/10'}`}>
+                    ${isOverdue ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : days === 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-amber-50 dark:bg-amber-900/10'}`}>
                     <div>
                       <div className="font-medium text-gray-700 dark:text-gray-200">{c.party_name}</div>
-                      <div className="text-gray-400">{c.method === 'lcn' ? 'LCN' : 'Chèque'} · {c.cheque_number ?? '—'}</div>
+                      <div className="text-gray-400">
+                        {c.method === 'lcn' ? 'LCN' : 'Chèque'} · {c.cheque_number ?? '—'}
+                        <span className="ml-1 text-gray-300">·</span>
+                        <span className="ml-1">{c.party_type === 'client' ? 'Client' : 'Fournisseur'}</span>
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-gray-800 dark:text-gray-100">{fmt(c.amount)} MAD</div>
-                      <div className={`font-semibold ${days < 0 ? 'text-red-500' : days === 0 ? 'text-orange-500' : 'text-amber-600'}`}>
-                        {days < 0 ? `${Math.abs(days)}j retard` : days === 0 ? "Aujourd'hui" : `${days}j`}
+                      <div className={`font-semibold ${isOverdue ? 'text-red-500' : days === 0 ? 'text-orange-500' : 'text-amber-600'}`}>
+                        {days === null ? '⚠ Sans échéance' : isOverdue ? `${Math.abs(days)}j retard` : days === 0 ? "Aujourd'hui" : `${days}j`}
                       </div>
                     </div>
                   </div>
@@ -480,6 +504,77 @@ export default function RapportsPage() {
           )}
         </div>
       </div>
+
+      {/* ── Row 6: Production ── */}
+      {productionStats && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+          {/* KPIs إنتاج */}
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-4">🏭 Production — {PERIOD_LABEL[period]}</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {[
+                { label: 'Ordres confirmés', value: String(productionStats.summary?.totalOrders ?? 0),       color: 'text-primary',   bg: 'bg-primary/5' },
+                { label: 'Qté produite',     value: String(productionStats.summary?.totalQty ?? 0),          color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/10' },
+                { label: 'Coût total',       value: fmt(productionStats.summary?.totalCost ?? 0) + ' MAD',   color: 'text-gray-700 dark:text-gray-200', bg: 'bg-gray-50 dark:bg-gray-700/30' },
+                { label: 'Coût moy./unité',  value: fmt(productionStats.summary?.avgUnitCost ?? 0) + ' MAD', color: 'text-blue-600',  bg: 'bg-blue-50 dark:bg-blue-900/10' },
+              ].map(s => (
+                <div key={s.label} className={`rounded-xl p-3 ${s.bg}`}>
+                  <div className="text-xs text-gray-400 mb-1">{s.label}</div>
+                  <div className={`font-bold text-sm ${s.color}`}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+            {/* Derniers ordres */}
+            {(productionStats.orders ?? []).length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-xs text-gray-400 font-medium mb-2">Derniers ordres</div>
+                {(productionStats.orders ?? []).slice(0, 4).map((o: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-200">{o.product_name}</span>
+                      <span className="text-gray-400 ml-2">{new Date(o.date).toLocaleDateString('fr-FR')}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-semibold text-primary">{fmt(o.quantity)} {o.unit}</span>
+                      <span className="text-gray-400 ml-2">{fmt(o.total_cost)} MAD</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Par produit */}
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-4">📦 Production par produit</h3>
+            {(productionStats.byProduct ?? []).length === 0 ? (
+              <div className="text-xs text-gray-400 text-center py-6">Aucune production cette période</div>
+            ) : (
+              <div className="space-y-3">
+                {(productionStats.byProduct ?? []).slice(0, 6).map((p: any, i: number) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-gray-300 w-4">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="font-medium text-gray-700 dark:text-gray-200 truncate">{p.product_name}</span>
+                        <span className="text-gray-500 shrink-0 ml-2">{fmt(p.qty)} {p.unit}</span>
+                      </div>
+                      <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                        <div className="bg-primary h-1.5 rounded-full"
+                          style={{ width: (productionStats.byProduct[0]?.cost ?? 0) > 0
+                            ? `${(p.cost / productionStats.byProduct[0].cost) * 100}%`
+                            : '0%' }} />
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold text-primary shrink-0">{fmt(p.cost)} MAD</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   )

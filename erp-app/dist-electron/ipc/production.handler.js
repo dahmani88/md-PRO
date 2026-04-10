@@ -10,11 +10,12 @@ function registerProductionHandlers() {
     (0, index_1.handle)('production:getBoms', (productId) => {
         const db = (0, connection_1.getDb)();
         const boms = db.prepare(`
-      SELECT bt.*, 
+      SELECT bt.*,
         json_group_array(json_object(
           'id', bl.id, 'material_id', bl.material_id,
           'material_name', p.name, 'material_code', p.code,
-          'quantity', bl.quantity, 'unit', bl.unit
+          'quantity', bl.quantity, 'unit', bl.unit,
+          'cmup_price', p.cmup_price, 'stock_quantity', p.stock_quantity
         )) as lines
       FROM bom_templates bt
       LEFT JOIN bom_lines bl ON bl.bom_id = bt.id
@@ -82,6 +83,14 @@ function registerProductionHandlers() {
         const bom_lines = order.bom_snapshot
             ? JSON.parse(order.bom_snapshot).lines
             : db.prepare('SELECT * FROM bom_lines WHERE bom_id = ?').all(order.bom_id);
+        // التحقق من الكميات المتاحة قبل البدء
+        for (const line of bom_lines) {
+            const product = db.prepare('SELECT name, stock_quantity FROM products WHERE id = ?').get(line.material_id);
+            const needed = line.quantity * order.quantity;
+            if (!product || product.stock_quantity < needed) {
+                throw new Error(`Stock insuffisant pour "${product?.name ?? line.material_id}": disponible ${product?.stock_quantity ?? 0}, requis ${needed}`);
+            }
+        }
         const tx = db.transaction(() => {
             // إعادة حساب التكلفة بـ CMUP الحالي (أكثر دقة)
             let actual_materials_cost = 0;
@@ -133,15 +142,80 @@ function registerProductionHandlers() {
         tx();
         return { success: true };
     });
+    (0, index_1.handle)('production:cancel', (id, userId = 1) => {
+        const db = (0, connection_1.getDb)();
+        const order = db.prepare('SELECT * FROM production_orders WHERE id = ?').get(id);
+        if (!order)
+            throw new Error('Ordre de production introuvable');
+        if (order.status === 'cancelled')
+            throw new Error('Déjà annulé');
+        if (order.status === 'confirmed')
+            throw new Error('Impossible d\'annuler un ordre confirmé (stock déjà mis à jour)');
+        db.prepare(`UPDATE production_orders SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+        return { success: true };
+    });
+    // BOM management
+    (0, index_1.handle)('production:updateBom', (data) => {
+        const db = (0, connection_1.getDb)();
+        const tx = db.transaction(() => {
+            db.prepare(`UPDATE bom_templates SET name=?, is_default=?, labor_cost=?, notes=? WHERE id=?`)
+                .run(data.name, data.is_default ? 1 : 0, data.labor_cost ?? 0, data.notes ?? null, data.id);
+            db.prepare('DELETE FROM bom_lines WHERE bom_id = ?').run(data.id);
+            for (const line of (data.lines ?? [])) {
+                db.prepare(`INSERT INTO bom_lines (bom_id, material_id, quantity, unit) VALUES (?, ?, ?, ?)`)
+                    .run(data.id, line.material_id, line.quantity, line.unit ?? 'unité');
+            }
+            return { success: true };
+        });
+        return tx();
+    });
+    (0, index_1.handle)('production:deleteBom', (id) => {
+        const db = (0, connection_1.getDb)();
+        const used = db.prepare(`SELECT COUNT(*) as c FROM production_orders WHERE bom_id = ? AND status != 'cancelled'`).get(id);
+        if (used.c > 0)
+            throw new Error('Cette nomenclature est utilisée par des ordres de production');
+        db.prepare('UPDATE bom_templates SET is_deleted = 1 WHERE id = ?').run(id);
+        return { success: true };
+    });
+    (0, index_1.handle)('production:getAllBoms', () => {
+        const db = (0, connection_1.getDb)();
+        const boms = db.prepare(`
+      SELECT bt.*, pr.name as product_name, pr.code as product_code,
+        pr.stock_quantity as product_stock, pr.unit as product_unit,
+        json_group_array(json_object(
+          'id', bl.id, 'material_id', bl.material_id,
+          'material_name', p.name, 'material_code', p.code,
+          'quantity', bl.quantity, 'unit', bl.unit,
+          'cmup_price', p.cmup_price, 'stock_quantity', p.stock_quantity
+        )) as lines
+      FROM bom_templates bt
+      JOIN products pr ON pr.id = bt.product_id
+      LEFT JOIN bom_lines bl ON bl.bom_id = bt.id
+      LEFT JOIN products p ON p.id = bl.material_id
+      WHERE bt.is_deleted = 0
+      GROUP BY bt.id
+      ORDER BY bt.created_at DESC
+    `).all();
+        return boms.map(b => ({ ...b, lines: JSON.parse(b.lines ?? '[]').filter((l) => l.id) }));
+    });
     // Transformations
     (0, index_1.handle)('transformations:getAll', () => {
         const db = (0, connection_1.getDb)();
-        return db.prepare(`
+        const rows = db.prepare(`
       SELECT t.*, p.name as material_name, p.code as material_code
       FROM transformations t
       JOIN products p ON p.id = t.raw_material_id
       ORDER BY t.date DESC
     `).all();
+        return rows.map(r => {
+            const outputs = db.prepare(`
+        SELECT to2.*, pr.name as product_name, pr.code as product_code, pr.unit
+        FROM transformation_outputs to2
+        JOIN products pr ON pr.id = to2.product_id
+        WHERE to2.transformation_id = ?
+      `).all(r.id);
+            return { ...r, outputs };
+        });
     });
     (0, index_1.handle)('transformations:create', (data) => {
         const db = (0, connection_1.getDb)();

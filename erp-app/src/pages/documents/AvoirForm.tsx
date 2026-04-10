@@ -6,7 +6,7 @@ import { api } from '../../lib/api'
 import { toast } from '../../components/ui/Toast'
 import FormField from '../../components/ui/FormField'
 import { PartySelector } from '../../components/ui/PartySelector'
-import { LinesTable, LinesTotals } from '../../components/ui/LinesTable'
+import { LinesTable, getDefaultTva, LinesTotals } from '../../components/ui/LinesTable'
 import type { Product, Document } from '../../types'
 
 const AVOIR_TYPES = [
@@ -61,7 +61,7 @@ export default function AvoirForm({ onSaved, onCancel, sourceInvoice }: Props) {
         unit_price:  l.unit_price,
         discount:    l.discount ?? 0,
         tva_rate:    l.tva_rate ?? 20,
-      })) ?? [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 }],
+      })) ?? [{ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() }],
     },
   })
 
@@ -210,7 +210,7 @@ export default function AvoirForm({ onSaved, onCancel, sourceInvoice }: Props) {
         register={register}
         setValue={setValue}
         onRemove={remove}
-        onAdd={() => append({ quantity: 1, unit_price: 0, discount: 0, tva_rate: 20 })}
+        onAdd={() => append({ quantity: 1, unit_price: 0, discount: 0, tva_rate: getDefaultTva() })}
         showDiscount
         showTva
       />
