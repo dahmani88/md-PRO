@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ERP Pro — Téléchargement</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 520px;
+      width: 90%;
+      text-align: center;
+    }
+
+    .logo {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      font-size: 32px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    h1 span { color: #3b82f6; }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.95rem;
+      margin-bottom: 40px;
+    }
+
+    .card {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 16px;
+    }
+
+    .card-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+
+    .steps {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+
+    .step-num {
+      width: 20px;
+      height: 20px;
+      background: #2d3748;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #3b82f6;
+      flex-shrink: 0;
+    }
+
+    .step-sep { color: #2d3748; font-size: 1rem; }
+
+    .license-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #0f1117;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+    }
+
+    .license-row:last-child { margin-bottom: 0; }
+
+    .license-info { text-align: left; }
+    .license-info .lbl { font-size: 0.72rem; color: #64748b; margin-bottom: 3px; }
+    .license-info .val {
+      font-family: 'Courier New', monospace;
+      font-size: 0.88rem;
+      color: #e2e8f0;
+      word-break: break-all;
+    }
+
+    .copy-btn {
+      background: #2d3748;
+      border: none;
+      border-radius: 8px;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+      white-space: nowrap;
+      margin-left: 12px;
+      flex-shrink: 0;
+    }
+
+    .copy-btn:hover { background: #3b82f6; color: #fff; }
+    .copy-btn.copied { background: #16a34a; color: #fff; }
+
+    .download-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: opacity 0.2s, transform 0.1s;
+      margin-top: 8px;
+    }
+
+    .download-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .download-btn:active { transform: translateY(0); }
+
+    .download-btn svg { flex-shrink: 0; }
+
+    .meta {
+      font-size: 0.75rem;
+      color: #475569;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="logo">⚡</div>
+    <h1>ERP <span>Pro</span></h1>
+    <p class="subtitle">Comptabilité & Facturation — Windows x64</p>
+
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div> Télécharger</div>
+      <div class="step-sep">›</div>
+      <div class="step"><div class="step-num">2</div> Installer</div>
+      <div class="step-sep">›</div>
+      <div class="step"><div class="step-num">3</div> Activer</div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Clé d'activation</div>
+
+      <div class="license-row">
+        <div class="license-info">
+          <div class="lbl">Nom d'entreprise</div>
+          <div class="val" id="company-name">first</div>
+        </div>
+        <button class="copy-btn" onclick="copyText('company-name', this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copier
+        </button>
+      </div>
+
+      <div class="license-row">
+        <div class="license-info">
+          <div class="lbl">Clé de licence</div>
+          <div class="val" id="license-key">Zmlyc3R8MjAyNi0wNC0yOA==.94D3F1B8C888351D</div>
+        </div>
+        <button class="copy-btn" onclick="copyText('license-key', this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copier
+        </button>
+      </div>
+    </div>
+
+    <a class="download-btn" href="https://www.mediafire.com/file/srta6pnxwitr1lm/mdPRO-1.0.0.exe/file" target="_blank">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Télécharger ERP Pro — v1.0.0
+    </a>
+
+    <p class="meta">Windows 10/11 · 64-bit · v1.0.0</p>
+
+  </div>
+
+  <script>
+    function copyText(id, btn) {
+      const text = document.getElementById(id).innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copié !';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
