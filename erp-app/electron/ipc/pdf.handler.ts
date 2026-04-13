@@ -7,27 +7,18 @@ import { app } from 'electron'
 
 export function registerPdfHandlers(): void {
 
-  // HTML للمعاينة في التطبيق
   handle('pdf:getHtml', (documentId: number) => {
     const pdfData = getInvoiceDataForPdf(documentId)
     return { html: generateInvoiceHtml(pdfData), number: pdfData.document?.number ?? 'document' }
   })
 
-  // طباعة — يفتح في المتصفح مع window.print() تلقائي
   handle('pdf:print', async (documentId: number) => {
     const pdfData = getInvoiceDataForPdf(documentId)
     const html = generateInvoiceHtml(pdfData)
 
     const printHtml = html
-      .replace('</head>', `
-      <style media="print">
-        @page { size: A4; margin: 10mm; }
-        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      </style>
-      </head>`)
-      .replace('</body>', `
-      <script>window.onload = function() { window.print(); };</script>
-      </body>`)
+      .replace('</head>', `<style media="print">@page{size:A4;margin:10mm;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}</style></head>`)
+      .replace('</body>', `<script>window.onload=function(){window.print();};</script></body>`)
 
     const tmpDir = join(app.getPath('temp'), 'erp-print')
     mkdirSync(tmpDir, { recursive: true })
@@ -37,7 +28,6 @@ export function registerPdfHandlers(): void {
     return { success: true }
   })
 
-  // حفظ PDF
   handle('pdf:generate', async (data: { documentId: number }) => {
     const pdfData = getInvoiceDataForPdf(data.documentId)
     const html = generateInvoiceHtml(pdfData)
@@ -64,13 +54,11 @@ export function registerPdfHandlers(): void {
     try {
       writeFileSync(tmpPath, html, 'utf-8')
       await pdfWin.loadFile(tmpPath)
-
       const pdfBuffer = await pdfWin.webContents.printToPDF({
         printBackground: true,
         pageSize: 'A4',
         margins: { top: 0, bottom: 0, left: 0, right: 0 },
       })
-
       writeFileSync(result.filePath, pdfBuffer)
       return { success: true, path: result.filePath }
     } finally {

@@ -1,0 +1,73 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: erp-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: erp-app
+        run: npm ci --ignore-scripts
+
+      - name: Install native modules for Electron
+        working-directory: erp-app
+        run: npx electron-builder install-app-deps
+
+      - name: Build renderer (Vite)
+        working-directory: erp-app
+        run: npx vite build
+
+      - name: Build electron (TypeScript)
+        working-directory: erp-app
+        run: npx tsc -p tsconfig.electron.json
+
+      - name: Build Windows installer
+        working-directory: erp-app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --win --x64
+
+      - name: Upload installer as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ERP-Pro-Windows-Setup
+          path: erp-app/release/*.exe
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: erp-app/release/*.exe
+          name: ERP Pro ${{ github.ref_name }}
+          body: |
+            ## ERP Pro ${{ github.ref_name }}
+
+            ### Téléchargement & Installation
+            1. Téléchargez le fichier `.exe` ci-dessous
+            2. Lancez l'installateur et suivez les étapes
+            3. Au premier lancement, entrez votre nom d'entreprise et votre clé de licence
+
+            ### Licence d'essai gratuite (15 jours)
+            - **Nom d'entreprise :** `first`
+            - **Clé de licence :** `Zmlyc3R8MjAyNi0wNC0yOA==.94D3F1B8C888351D`
+
+            > Pour obtenir une licence complète, contactez-nous.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

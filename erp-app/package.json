@@ -2,11 +2,12 @@
   "name": "erp-app",
   "version": "1.0.0",
   "description": "ERP Comptabilité & Facturation — Desktop App",
+  "author": "ERP Pro",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "node dev.js",
-    "postinstall": "electron-rebuild -f -w better-sqlite3 || exit 0",
-    "build:renderer": "tsc && vite build",
+    "postinstall": "electron-builder install-app-deps || exit 0",
+    "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "build": "npm run build:renderer && npm run build:electron && electron-builder",
     "preview": "vite preview",
@@ -62,11 +63,24 @@
       "output": "release"
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
-    ]
+      "dist-electron/**/*",
+      "node_modules/**/*"
+    ],
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
+    }
   }
 }
