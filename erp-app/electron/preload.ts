@@ -114,6 +114,7 @@ const api = {
   pdfGetHtml:         (id: number)  => ipcRenderer.invoke('pdf:getHtml', id),
   printDocument:      (id: number)  => ipcRenderer.invoke('pdf:print', id),
   generatePdf:        (data: unknown) => ipcRenderer.invoke('pdf:generate', data),
+  generatePdfFromHtml:(data: unknown) => ipcRenderer.invoke('pdf:generateFromHtml', data),
 
   // --- Excel ---
   excelExportDocuments: (f: unknown) => ipcRenderer.invoke('excel:exportDocuments', f),

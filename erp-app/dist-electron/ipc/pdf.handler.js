@@ -8,25 +8,16 @@ const fs_1 = require("fs");
 const path_1 = require("path");
 const electron_2 = require("electron");
 function registerPdfHandlers() {
-    // HTML للمعاينة في التطبيق
     (0, index_1.handle)('pdf:getHtml', (documentId) => {
         const pdfData = (0, pdf_service_1.getInvoiceDataForPdf)(documentId);
         return { html: (0, pdf_service_1.generateInvoiceHtml)(pdfData), number: pdfData.document?.number ?? 'document' };
     });
-    // طباعة — يفتح في المتصفح مع window.print() تلقائي
     (0, index_1.handle)('pdf:print', async (documentId) => {
         const pdfData = (0, pdf_service_1.getInvoiceDataForPdf)(documentId);
         const html = (0, pdf_service_1.generateInvoiceHtml)(pdfData);
         const printHtml = html
-            .replace('</head>', `
-      <style media="print">
-        @page { size: A4; margin: 10mm; }
-        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      </style>
-      </head>`)
-            .replace('</body>', `
-      <script>window.onload = function() { window.print(); };</script>
-      </body>`);
+            .replace('</head>', `<style media="print">@page{size:A4;margin:10mm;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}</style></head>`)
+            .replace('</body>', `<script>window.onload=function(){window.print();};</script></body>`);
         const tmpDir = (0, path_1.join)(electron_2.app.getPath('temp'), 'erp-print');
         (0, fs_1.mkdirSync)(tmpDir, { recursive: true });
         const tmpPath = (0, path_1.join)(tmpDir, `print-${pdfData.document?.number ?? 'doc'}.html`);
@@ -34,7 +25,6 @@ function registerPdfHandlers() {
         await electron_1.shell.openPath(tmpPath);
         return { success: true };
     });
-    // حفظ PDF
     (0, index_1.handle)('pdf:generate', async (data) => {
         const pdfData = (0, pdf_service_1.getInvoiceDataForPdf)(data.documentId);
         const html = (0, pdf_service_1.generateInvoiceHtml)(pdfData);
@@ -65,6 +55,38 @@ function registerPdfHandlers() {
             });
             (0, fs_1.writeFileSync)(result.filePath, pdfBuffer);
             return { success: true, path: result.filePath };
+        }
+        finally {
+            if (!pdfWin.isDestroyed())
+                pdfWin.close();
+        }
+    });
+    (0, index_1.handle)('pdf:generateFromHtml', async (data) => {
+        const win = electron_1.BrowserWindow.getAllWindows()[0];
+        // حفظ مباشر في مجلد Downloads بدون dialog
+        const downloadsDir = electron_2.app.getPath('downloads');
+        const filePath = (0, path_1.join)(downloadsDir, data.filename);
+        const pdfWin = new electron_1.BrowserWindow({
+            show: false,
+            webPreferences: { nodeIntegration: false, contextIsolation: true },
+        });
+        const tmpDir = (0, path_1.join)(electron_2.app.getPath('temp'), 'erp-pdf-gen');
+        (0, fs_1.mkdirSync)(tmpDir, { recursive: true });
+        const tmpPath = (0, path_1.join)(tmpDir, `temp-${Date.now()}.html`);
+        try {
+            (0, fs_1.writeFileSync)(tmpPath, data.html, 'utf-8');
+            await pdfWin.loadFile(tmpPath);
+            const pdfBuffer = await pdfWin.webContents.printToPDF({
+                printBackground: true,
+                pageSize: 'A4',
+                margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+            });
+            (0, fs_1.writeFileSync)(filePath, pdfBuffer);
+            // فتح مجلد Downloads مع تحديد الملف
+            const { shell } = require('electron');
+            shell.showItemInFolder(filePath);
+            win?.focus();
+            return { success: true, path: filePath };
         }
         finally {
             if (!pdfWin.isDestroyed())

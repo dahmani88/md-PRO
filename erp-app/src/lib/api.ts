@@ -134,7 +134,8 @@ export const api = {
   // PDF
   pdfGetHtml:      (id: number)  => call(() => window.api.pdfGetHtml(id),    () => Promise.resolve({ success: true, data: { html: '', number: 'preview' } })),
   printDocument:   (id: number)  => call(() => window.api.printDocument(id), () => Promise.resolve({ success: true })),
-  generatePdf: (d: unknown) => call(() => window.api.generatePdf(d), () => mockApi.generatePdf()),
+  generatePdf:         (d: unknown) => call(() => window.api.generatePdf(d),         () => mockApi.generatePdf()),
+  generatePdfFromHtml: (d: unknown) => call(() => window.api.generatePdfFromHtml(d), () => Promise.resolve({ success: true, data: null })),
 
   // Excel
   excelExportDocuments: (f: unknown) => call(() => window.api.excelExportDocuments(f), () => mockApi.generatePdf()),

@@ -65,4 +65,53 @@ export function registerPdfHandlers(): void {
       if (!pdfWin.isDestroyed()) pdfWin.close()
     }
   })
+
+  handle('pdf:generateFromHtml', async (data: { html: string; filename: string }) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    const { shell } = require('electron')
+
+    const pdfWin = new BrowserWindow({
+      show: false,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    })
+
+    const tmpDir = join(app.getPath('temp'), 'erp-pdf-gen')
+    mkdirSync(tmpDir, { recursive: true })
+    const tmpPath = join(tmpDir, `temp-${Date.now()}.html`)
+
+    try {
+      writeFileSync(tmpPath, data.html, 'utf-8')
+      await pdfWin.loadFile(tmpPath)
+      const pdfBuffer = await pdfWin.webContents.printToPDF({
+        printBackground: true,
+        pageSize: 'A4',
+        margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+      })
+
+      let filePath: string
+
+      if (process.platform === 'linux') {
+        // على Linux: حفظ مباشر في Downloads بدون dialog
+        filePath = join(app.getPath('downloads'), data.filename)
+        writeFileSync(filePath, pdfBuffer)
+        shell.showItemInFolder(filePath)
+        win?.focus()
+      } else {
+        // على Windows/Mac: dialog اختيار المسار
+        const result = await dialog.showSaveDialog(win, {
+          title: 'Enregistrer le PDF',
+          defaultPath: data.filename,
+          filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        })
+        win?.focus()
+        if (result.canceled || !result.filePath) return { success: false, canceled: true }
+        filePath = result.filePath
+        writeFileSync(filePath, pdfBuffer)
+      }
+
+      return { success: true, path: filePath }
+    } finally {
+      if (!pdfWin.isDestroyed()) pdfWin.close()
+    }
+  })
 }

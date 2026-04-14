@@ -2,11 +2,20 @@ import { useState } from 'react'
 import { api } from '../../lib/api'
 import { toast } from '../../components/ui/Toast'
 
+function getCurrentMonthRange() {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  return { start: fmt(start), end: fmt(end) }
+}
+
 export default function TvaView() {
+  const range = getCurrentMonthRange()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [startDate, setStartDate] = useState(range.start)
+  const [endDate, setEndDate] = useState(range.end)
 
   async function load() {
     if (!startDate || !endDate) return
@@ -43,8 +52,8 @@ export default function TvaView() {
                 toast('Fichier Excel enregistré ✓')
               } catch (e: any) { toast(e.message, 'error') }
             }} className="btn-secondary btn-sm">📊 Excel</button>
-            <button onClick={() => {
-              const printContent = `
+            <button onClick={async () => {
+              const html = `
                 <html><head><title>Déclaration TVA</title>
                 <style>
                   body { font-family: Arial, sans-serif; padding: 30px; color: #111; }
@@ -54,8 +63,8 @@ export default function TvaView() {
                   th { background: #f3f4f6; padding: 8px 12px; text-align: left; font-size: 13px; }
                   td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
                   .total-row td { font-weight: bold; border-top: 2px solid #d1d5db; }
-                  .result { text-align: center; padding: 20px; border: 2px solid #fca5a5; border-radius: 8px; background: #fef2f2; }
-                  .result .amount { font-size: 28px; font-weight: bold; color: #dc2626; }
+                  .result { text-align: center; padding: 20px; border: 2px solid ${(data.tvaDue ?? 0) >= 0 ? '#fca5a5' : '#86efac'}; border-radius: 8px; background: ${(data.tvaDue ?? 0) >= 0 ? '#fef2f2' : '#f0fdf4'}; }
+                  .result .amount { font-size: 28px; font-weight: bold; color: ${(data.tvaDue ?? 0) >= 0 ? '#dc2626' : '#16a34a'}; }
                   @page { size: A4; margin: 15mm; }
                 </style></head><body>
                 <h2>Déclaration TVA</h2>
@@ -77,8 +86,10 @@ export default function TvaView() {
                 </div>
                 </body></html>
               `
-              const w = window.open('', '_blank')
-              if (w) { w.document.write(printContent); w.document.close(); w.print() }
+              try {
+                await api.generatePdfFromHtml({ html, filename: `TVA-${startDate}-${endDate}.pdf` })
+                toast('PDF enregistré ✓')
+              } catch (e: any) { toast(e.message, 'error') }
             }} className="btn-secondary btn-sm">📄 PDF</button>
           </div>
         )}

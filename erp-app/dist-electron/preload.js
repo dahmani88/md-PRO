@@ -100,6 +100,7 @@ const api = {
     pdfGetHtml: (id) => electron_1.ipcRenderer.invoke('pdf:getHtml', id),
     printDocument: (id) => electron_1.ipcRenderer.invoke('pdf:print', id),
     generatePdf: (data) => electron_1.ipcRenderer.invoke('pdf:generate', data),
+    generatePdfFromHtml: (data) => electron_1.ipcRenderer.invoke('pdf:generateFromHtml', data),
     // --- Excel ---
     excelExportDocuments: (f) => electron_1.ipcRenderer.invoke('excel:exportDocuments', f),
     excelExportParties: (t) => electron_1.ipcRenderer.invoke('excel:exportParties', t),
