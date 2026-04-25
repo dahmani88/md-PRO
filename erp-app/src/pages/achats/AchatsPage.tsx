@@ -37,7 +37,7 @@ export default function AchatsPage() {
           ))}
         </div>
       </div>
-      <div className="p-4 flex-1 min-h-0 overflow-hidden">
+      <div className="p-4 flex-1 min-h-0 overflow-auto">
         {tab === 'orders'     && <PurchaseOrdersList />}
         {tab === 'receptions' && <ReceptionsList />}
         {tab === 'invoices'   && <PurchaseInvoicesList />}

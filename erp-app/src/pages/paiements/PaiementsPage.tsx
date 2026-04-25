@@ -250,7 +250,7 @@ export default function PaiementsPage() {
   const pending  = filtered.filter(p => p.status === 'pending').length
 
   return (
-    <div className="h-full flex flex-col gap-3 p-4 overflow-hidden">
+    <div className="h-full flex flex-col gap-3 p-4 overflow-auto">
 
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
