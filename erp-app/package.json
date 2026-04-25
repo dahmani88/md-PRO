@@ -1,6 +1,6 @@
 {
   "name": "mizan-erp",
-  "version": "1.0.13",
+  "version": "1.2.0",
   "description": "Mizan ERP — Comptabilité & Facturation",
   "author": "Mizan ERP",
   "main": "dist-electron/main.js",
