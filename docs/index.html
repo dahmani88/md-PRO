@@ -167,6 +167,45 @@
       color: #475569;
       margin-top: 20px;
     }
+
+    .changelog {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 24px;
+      text-align: left;
+    }
+
+    .changelog-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #3b82f6;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .changelog-list {
+      list-style: none;
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+
+    .changelog-list li {
+      padding: 6px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .changelog-list li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #16a34a;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -210,10 +249,22 @@
 
     <a class="download-btn" href="https://github.com/md-erp/mizan/releases/download/v1.0.13/Mizan-ERP-Setup-v1.0.13.exe" download>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Télécharger Mizan ERP
+      Télécharger Mizan ERP v1.0.13
     </a>
 
-    <p class="meta">Windows 10/11 · 64-bit · v1.0.13</p>
+    <p class="meta">Windows 10/11 · 64-bit · v1.0.13 · 86 MB</p>
+
+    <div class="changelog">
+      <div class="changelog-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Nouveautés de la version 1.0.13
+      </div>
+      <ul class="changelog-list">
+        <li>Correction du problème de défilement dans les pages</li>
+        <li>Améliorations de la performance et de la stabilité</li>
+        <li>Corrections techniques diverses</li>
+      </ul>
+    </div>
 
   </div>
 

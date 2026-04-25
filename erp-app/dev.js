@@ -12,7 +12,7 @@ function bin_cmd(name) {
 function run(exe, args, env) {
   const p = spawn(bin_cmd(exe), args, {
     stdio: 'inherit',
-    shell: false,
+    shell: isWin,
     env: { ...process.env, ...env }
   });
   p.on('error', (e) => console.error(`[dev] ${exe} error: ${e.message}`));

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useAuthStore } from '../store/auth.store'
 import { useAppStore } from '../store/app.store'
 import NotificationCenter from '../components/NotificationCenter'
@@ -160,7 +160,7 @@ export default function MainLayout() {
     </header>
 
       {/* Page content */}
-      <main className="flex-1 min-h-0 overflow-hidden">
+      <main className="flex-1 min-h-0 overflow-auto">
         <ErrorBoundary>
           {canAccess(user, activeNav)
             ? pages[activeNav]

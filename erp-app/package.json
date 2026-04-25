@@ -1,6 +1,6 @@
 {
   "name": "mizan-erp",
-  "version": "1.0.8",
+  "version": "1.0.13",
   "description": "Mizan ERP — Comptabilité & Facturation",
   "author": "Mizan ERP",
   "main": "dist-electron/main.js",
@@ -73,7 +73,8 @@
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "include": "build/uninstaller.nsh"
+      "include": "build/uninstaller.nsh",
+      "warningsAsErrors": false
     },
     "files": [
       "dist/**/*",

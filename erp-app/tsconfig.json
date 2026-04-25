@@ -19,8 +19,7 @@
     "paths": {
       "@/*": ["src/*"],
       "@electron/*": ["electron/*"]
-    },
-    "types": ["jest", "node"]
+    }
   },
   "include": ["src", "electron"],
   "references": [
